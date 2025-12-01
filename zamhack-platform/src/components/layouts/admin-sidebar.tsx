@@ -10,6 +10,7 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { LogoutButton } from "@/components/logout-button"
 
 const adminNavItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -48,11 +49,9 @@ export const AdminSidebar = () => {
           )
         })}
       </nav>
+      <div className="border-t p-4">
+        <LogoutButton />
+      </div>
     </div>
   )
 }
-
-
-
-
-

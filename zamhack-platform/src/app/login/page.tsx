@@ -54,9 +54,8 @@ const LoginPage = () => {
       if (result?.error) {
         setServerError(result.error)
       } else if (result?.success) {
-        // Redirect to dashboard on success. 
-        // Middleware will intercept this and move Companies/Admins to their correct pages.
-        router.push("/dashboard")
+        // FIX: Redirect to root ('/') so the Smart Home Page can handle the role routing
+        router.push("/")
         router.refresh()
       }
     } catch (err) {
@@ -114,12 +113,19 @@ const LoginPage = () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? "Logging in..." : "Login"}
             </Button>
             <div className="text-center text-sm">
               <span className="text-zinc-500">Don't have an account? </span>
-              <Link href="/signup" className="text-primary underline-offset-4 hover:underline font-medium">
+              <Link
+                href="/signup"
+                className="text-primary underline-offset-4 hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </div>
