@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-// 1. Import the Toaster component
 import { Toaster } from "@/components/ui/sonner";
 
+// --- Existing App Fonts ---
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -12,6 +12,19 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// --- New Landing Page Fonts ---
+const outfit = Outfit({ 
+  subsets: ["latin"], 
+  variable: "--font-outfit",
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({ 
+  subsets: ["latin"], 
+  variable: "--font-jakarta",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,11 +39,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* FontAwesome CDN for Landing Page Icons */}
+        <link 
+          rel="stylesheet" 
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" 
+        />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        // Combine all font variables so they are available globally
+        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${jakarta.variable} antialiased`}
       >
         {children}
-        {/* 2. Add Toaster here so toast notifications work app-wide */}
         <Toaster />
       </body>
     </html>
