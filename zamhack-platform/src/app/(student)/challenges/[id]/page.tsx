@@ -329,9 +329,9 @@ export default async function ChallengePage({
                     </Link>
                   </Button>
                 ) : (
-                  // FREE FLOW - UPDATED PROP USAGE
+                  // FREE FLOW
                   <JoinChallengeDialog
-                    challengeId={id} // Changed from challenge={challenge}
+                    challengeId={id}
                     userTeam={userTeam ? { 
                       id: userTeam.id, 
                       name: userTeam.name, 
@@ -339,11 +339,6 @@ export default async function ChallengePage({
                     } : null}
                     userId={userId}
                     registrationClosed={isRegistrationClosed}
-                    trigger={
-                      <Button className="w-full font-bold shadow-md" size="lg">
-                        Join Challenge (Free)
-                      </Button>
-                    }
                   />
                 )}
               </div>
@@ -440,7 +435,7 @@ export default async function ChallengePage({
                         isTeamLeader={userTeam?.leader_id === userId}
                         // Added requirement props from database
                         requiresGithub={milestone.requires_github}
-                        requiresUrl={milestone.requiresgit add ._url}
+                        requiresUrl={milestone.requires_url}
                         requiresText={milestone.requires_text}
                       />
                     </div>
