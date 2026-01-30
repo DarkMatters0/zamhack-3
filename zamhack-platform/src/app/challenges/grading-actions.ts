@@ -51,11 +51,17 @@ export async function submitEvaluation(
     return { success: false, error: "Submission not found" }
   }
 
+  // --- FIX STARTS HERE ---
+  if (!submission.milestone_id) {
+    return { success: false, error: "Submission is not linked to a milestone" }
+  }
+  // -----------------------
+
   // Get milestone to get challenge_id
   const { data: milestone, error: milestoneError } = await supabase
     .from("milestones")
     .select("challenge_id")
-    .eq("id", submission.milestone_id)
+    .eq("id", submission.milestone_id) // This is now safe because we checked for null above
     .single()
 
   if (milestoneError || !milestone || !milestone.challenge_id) {
@@ -126,10 +132,3 @@ export async function submitEvaluation(
 
   return { success: true }
 }
-
-
-
-
-
-
-
