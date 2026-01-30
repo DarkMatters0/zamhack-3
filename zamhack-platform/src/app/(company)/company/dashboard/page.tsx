@@ -65,8 +65,41 @@ async function getCompanyDashboardData(): Promise<DashboardData> {
     redirect("/dashboard")
   }
 
+  // --- SELF-REPAIR LOGIC START ---
+  // If the user has no organization_id, try to create/link one based on signup metadata
+  if (!profile.organization_id && profile.role === "company_admin") {
+    const companyName = user.user_metadata?.company_name
+    
+    if (companyName) {
+      console.log(`[Auto-Fix] Attempting to create organization for user: ${user.id}`)
+      
+      // 1. Try to create the organization
+      const { data: newOrg, error: createOrgError } = await supabase
+        .from("organizations")
+        .insert({ name: companyName })
+        .select("id")
+        .single()
+      
+      if (newOrg && !createOrgError) {
+        // 2. Link profile to the new organization
+        const { error: linkError } = await supabase
+          .from("profiles")
+          .update({ organization_id: newOrg.id })
+          .eq("id", user.id)
+        
+        if (!linkError) {
+          // Success! Update local variable so the rest of the page loads
+          profile.organization_id = newOrg.id
+        }
+      } else {
+        console.error("Failed to auto-create organization:", createOrgError)
+      }
+    }
+  }
+  // --- SELF-REPAIR LOGIC END ---
+
   if (!profile.organization_id) {
-    throw new Error("User does not have an organization assigned")
+    throw new Error("User does not have an organization assigned. Please contact support.")
   }
 
   const { data: organization, error: orgError } = await supabase
