@@ -1,425 +1,202 @@
--- -----------------------------------------------------------------------------
--- 1. SETUP & EXTENSIONS
--- -----------------------------------------------------------------------------
--- Enable UUID generation
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
--- Enable Vector extension for NLP matching
-CREATE EXTENSION IF NOT EXISTS "vector";
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- -----------------------------------------------------------------------------
--- 2. ENUMS (defining fixed states from specs)
--- -----------------------------------------------------------------------------
-CREATE TYPE public.app_role AS ENUM (
-    'student', 
-    'company_admin', 
-    'company_member', 
-    'admin', 
-    'evaluator'
-);
-
-CREATE TYPE public.challenge_status AS ENUM (
-    'draft', 
-    'pending_approval', 
-    'approved', 
-    'in_progress', 
-    'under_review', 
-    'completed', 
-    'cancelled'
-);
-
-CREATE TYPE public.proficiency_level AS ENUM (
-    'beginner', 
-    'intermediate', 
-    'advanced'
-);
-
-CREATE TYPE public.milestone_status AS ENUM (
-    'locked', 
-    'open', 
-    'submitted', 
-    'reviewed'
-);
-
--- -----------------------------------------------------------------------------
--- 3. ORGANIZATIONS (Companies)
--- -----------------------------------------------------------------------------
-CREATE TABLE public.organizations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,
-    description TEXT,
-    industry TEXT,
-    website TEXT,
-    logo_url TEXT,
-    
-    -- Verification & Admin
-    is_verified BOOLEAN DEFAULT FALSE,
-    verification_status TEXT DEFAULT 'pending', -- pending, verified, rejected
-    
-    -- Seat Management
-    max_seats INTEGER DEFAULT 5,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- -----------------------------------------------------------------------------
--- 4. USERS & PROFILES
--- -----------------------------------------------------------------------------
-CREATE TABLE public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    
-    -- Basic Info
-    full_name TEXT,
-    avatar_url TEXT,
-    bio TEXT,
-    role public.app_role DEFAULT 'student',
-    
-    -- Student Specific
-    university TEXT,
-    degree TEXT,
-    graduation_year INTEGER,
-    resume_link TEXT,
-    linkedin_url TEXT,
-    github_url TEXT,
-    
-    -- Company Specific
-    organization_id UUID REFERENCES public.organizations(id),
-    
-    -- NLP Matching
-    embedding vector(384), 
-    
-    -- System Limits
-    max_active_challenges INTEGER DEFAULT 3,
-    withdrawal_cooldown_until TIMESTAMP WITH TIME ZONE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- -----------------------------------------------------------------------------
--- 5. SKILLS
--- -----------------------------------------------------------------------------
-CREATE TABLE public.skills (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL UNIQUE,
-    category TEXT, -- Tech, Design, Business
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Student Portfolio Skills
-CREATE TABLE public.student_skills (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    profile_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    skill_id UUID REFERENCES public.skills(id) ON DELETE CASCADE,
-    level public.proficiency_level NOT NULL,
-    UNIQUE(profile_id, skill_id)
-);
-
--- -----------------------------------------------------------------------------
--- 6. TEAMS
--- -----------------------------------------------------------------------------
-CREATE TABLE public.teams (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL,
-    join_code TEXT UNIQUE DEFAULT substring(md5(random()::text) from 0 for 8),
-    leader_id UUID REFERENCES public.profiles(id),
-    avatar_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE public.team_members (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    team_id UUID REFERENCES public.teams(id) ON DELETE CASCADE,
-    profile_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(profile_id) -- Enforces "Student can only be in 1 team at a time"
-);
-
--- -----------------------------------------------------------------------------
--- 7. CHALLENGES
--- -----------------------------------------------------------------------------
-CREATE TABLE public.challenges (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    organization_id UUID REFERENCES public.organizations(id),
-    created_by UUID REFERENCES public.profiles(id), 
-    
-    -- Core Content
-    title TEXT NOT NULL,
-    description TEXT,
-    problem_brief TEXT, 
-    industry TEXT,
-    difficulty public.proficiency_level,
-    
-    -- Settings
-    status public.challenge_status DEFAULT 'draft',
-    participation_type TEXT CHECK (participation_type IN ('solo', 'team', 'both')),
-    max_participants INTEGER DEFAULT 50,
-    max_teams INTEGER DEFAULT 20,
-    max_team_size INTEGER DEFAULT 4,
-    
-    -- Timeline
-    start_date TIMESTAMP WITH TIME ZONE,
-    end_date TIMESTAMP WITH TIME ZONE,
-    registration_deadline TIMESTAMP WITH TIME ZONE,
-    
-    -- NLP
-    embedding vector(384), 
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Skills earned by completing challenge
-CREATE TABLE public.challenge_skills (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    challenge_id UUID REFERENCES public.challenges(id) ON DELETE CASCADE,
-    skill_id UUID REFERENCES public.skills(id) ON DELETE CASCADE
-);
-
--- Evaluators assigned to challenges
 CREATE TABLE public.challenge_evaluators (
-    challenge_id UUID REFERENCES public.challenges(id) ON DELETE CASCADE,
-    evaluator_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (challenge_id, evaluator_id)
+  challenge_id uuid NOT NULL,
+  evaluator_id uuid NOT NULL,
+  assigned_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT challenge_evaluators_pkey PRIMARY KEY (challenge_id, evaluator_id),
+  CONSTRAINT challenge_evaluators_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
+  CONSTRAINT challenge_evaluators_evaluator_id_fkey FOREIGN KEY (evaluator_id) REFERENCES public.profiles(id)
 );
-
--- -----------------------------------------------------------------------------
--- 8. MILESTONES
--- -----------------------------------------------------------------------------
-CREATE TABLE public.milestones (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    challenge_id UUID REFERENCES public.challenges(id) ON DELETE CASCADE,
-    sequence_order INTEGER NOT NULL, 
-    title TEXT NOT NULL,
-    description TEXT,
-    due_date TIMESTAMP WITH TIME ZONE,
-    
-    -- Requirements schema
-    requires_github BOOLEAN DEFAULT FALSE,
-    requires_url BOOLEAN DEFAULT FALSE,
-    requires_text BOOLEAN DEFAULT FALSE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- -----------------------------------------------------------------------------
--- 9. PARTICIPATION & SUBMISSIONS
--- -----------------------------------------------------------------------------
 CREATE TABLE public.challenge_participants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    challenge_id UUID REFERENCES public.challenges(id) ON DELETE CASCADE,
-    
-    -- Polymorphic: Either a User (Solo) OR a Team joins
-    user_id UUID REFERENCES public.profiles(id),
-    team_id UUID REFERENCES public.teams(id),
-    
-    status TEXT DEFAULT 'active', 
-    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Validation: Must have user OR team, not both
-    CONSTRAINT check_participant_type CHECK (
-        (user_id IS NOT NULL AND team_id IS NULL) OR 
-        (user_id IS NULL AND team_id IS NOT NULL)
-    )
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  challenge_id uuid,
+  user_id uuid,
+  team_id uuid,
+  status text DEFAULT 'active'::text,
+  joined_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT challenge_participants_pkey PRIMARY KEY (id),
+  CONSTRAINT challenge_participants_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
+  CONSTRAINT challenge_participants_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT challenge_participants_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id)
 );
-
-CREATE TABLE public.submissions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    milestone_id UUID REFERENCES public.milestones(id),
-    participant_id UUID REFERENCES public.challenge_participants(id),
-    
-    -- Content
-    github_link TEXT,
-    demo_url TEXT,
-    written_response TEXT,
-    
-    submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.challenge_skills (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  challenge_id uuid,
+  skill_id uuid,
+  CONSTRAINT challenge_skills_pkey PRIMARY KEY (id),
+  CONSTRAINT challenge_skills_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
+  CONSTRAINT challenge_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.skills(id)
 );
-
--- -----------------------------------------------------------------------------
--- 10. REVIEWS (Evaluations)
--- -----------------------------------------------------------------------------
-CREATE TABLE public.evaluations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    submission_id UUID REFERENCES public.submissions(id),
-    reviewer_id UUID REFERENCES public.profiles(id), 
-    
-    score INTEGER CHECK (score >= 0 AND score <= 100),
-    feedback TEXT,
-    is_draft BOOLEAN DEFAULT TRUE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.challenges (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  organization_id uuid,
+  created_by uuid,
+  title text NOT NULL,
+  description text,
+  problem_brief text,
+  industry text,
+  difficulty USER-DEFINED,
+  status USER-DEFINED DEFAULT 'draft'::challenge_status,
+  participation_type text CHECK (participation_type = ANY (ARRAY['solo'::text, 'team'::text, 'both'::text])),
+  max_participants integer DEFAULT 50,
+  max_teams integer DEFAULT 20,
+  max_team_size integer DEFAULT 4,
+  start_date timestamp with time zone,
+  end_date timestamp with time zone,
+  registration_deadline timestamp with time zone,
+  embedding USER-DEFINED,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  entry_fee_amount numeric DEFAULT 0,
+  currency text DEFAULT 'PHP'::text,
+  CONSTRAINT challenges_pkey PRIMARY KEY (id),
+  CONSTRAINT challenges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT challenges_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
-
--- -----------------------------------------------------------------------------
--- 11. MESSAGING
--- -----------------------------------------------------------------------------
-CREATE TABLE public.conversations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    challenge_id UUID REFERENCES public.challenges(id), 
-    type TEXT CHECK (type IN ('direct', 'team', 'support')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 CREATE TABLE public.conversation_participants (
-    conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
-    profile_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    PRIMARY KEY (conversation_id, profile_id)
+  conversation_id uuid NOT NULL,
+  profile_id uuid NOT NULL,
+  CONSTRAINT conversation_participants_pkey PRIMARY KEY (conversation_id, profile_id),
+  CONSTRAINT conversation_participants_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id),
+  CONSTRAINT conversation_participants_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
 );
-
+CREATE TABLE public.conversations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  challenge_id uuid,
+  type text CHECK (type = ANY (ARRAY['direct'::text, 'team'::text, 'support'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT conversations_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id)
+);
+CREATE TABLE public.evaluations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  submission_id uuid,
+  reviewer_id uuid,
+  score integer CHECK (score >= 0 AND score <= 100),
+  feedback text,
+  is_draft boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT evaluations_pkey PRIMARY KEY (id),
+  CONSTRAINT evaluations_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
+  CONSTRAINT evaluations_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
-    sender_id UUID REFERENCES public.profiles(id),
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  conversation_id uuid,
+  sender_id uuid,
+  content text NOT NULL,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id),
+  CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id)
 );
-
--- -----------------------------------------------------------------------------
--- 12. ROW LEVEL SECURITY (RLS) SETUP
--- -----------------------------------------------------------------------------
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.challenge_participants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-
--- -----------------------------------------------------------------------------
--- 13. POLICIES (The Rules)
--- -----------------------------------------------------------------------------
-
--- --- PROFILES ---
-CREATE POLICY "Profiles are viewable by everyone" 
-ON public.profiles FOR SELECT USING (true);
-
-CREATE POLICY "Users can update own profile" 
-ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
--- --- CHALLENGES ---
-CREATE POLICY "Public read active challenges" 
-ON public.challenges FOR SELECT 
-USING (status IN ('approved', 'in_progress', 'completed'));
-
-CREATE POLICY "Companies view own challenges" 
-ON public.challenges FOR SELECT 
-USING (organization_id IN (
-    SELECT organization_id FROM public.profiles WHERE id = auth.uid()
-));
-
-CREATE POLICY "Companies edit own challenges" 
-ON public.challenges FOR ALL 
-USING (organization_id IN (
-    SELECT organization_id FROM public.profiles WHERE id = auth.uid()
-));
-
--- --- PARTICIPANTS ---
-CREATE POLICY "View own participation" 
-ON public.challenge_participants FOR SELECT 
-USING (user_id = auth.uid() OR team_id IN (
-    SELECT team_id FROM public.team_members WHERE profile_id = auth.uid()
-));
-
-CREATE POLICY "Companies view participants" 
-ON public.challenge_participants FOR SELECT 
-USING (challenge_id IN (
-    SELECT id FROM public.challenges WHERE organization_id IN (
-        SELECT organization_id FROM public.profiles WHERE id = auth.uid()
-    )
-));
-
--- --- TEAMS ---
-CREATE POLICY "Teams are viewable by everyone" 
-ON public.teams FOR SELECT USING (true);
-
-CREATE POLICY "Users can create teams" 
-ON public.teams FOR INSERT WITH CHECK (auth.uid() = leader_id);
-
-CREATE POLICY "Leader can update team" 
-ON public.teams FOR UPDATE USING (auth.uid() = leader_id);
-
--- --- TEAM MEMBERS ---
-CREATE POLICY "View team memberships" 
-ON public.team_members FOR SELECT USING (true);
-
-CREATE POLICY "Join team" 
-ON public.team_members FOR INSERT WITH CHECK (auth.uid() = profile_id);
-
--- --- SUBMISSIONS ---
-CREATE POLICY "View own submissions" 
-ON public.submissions FOR SELECT 
-USING (participant_id IN (
-    SELECT id FROM public.challenge_participants 
-    WHERE user_id = auth.uid() OR team_id IN (
-        SELECT team_id FROM public.team_members WHERE profile_id = auth.uid()
-    )
-));
-
-CREATE POLICY "Create submissions" 
-ON public.submissions FOR INSERT 
-WITH CHECK (participant_id IN (
-    SELECT id FROM public.challenge_participants 
-    WHERE user_id = auth.uid() OR team_id IN (
-        SELECT team_id FROM public.team_members WHERE profile_id = auth.uid()
-    )
-));
-
-CREATE POLICY "Companies view submissions" 
-ON public.submissions FOR SELECT 
-USING (milestone_id IN (
-    SELECT id FROM public.milestones WHERE challenge_id IN (
-        SELECT id FROM public.challenges WHERE organization_id IN (
-            SELECT organization_id FROM public.profiles WHERE id = auth.uid()
-        )
-    )
-));
-
--- --- MESSAGES ---
-CREATE POLICY "Read conversation messages" 
-ON public.messages FOR SELECT 
-USING (conversation_id IN (
-    SELECT conversation_id FROM public.conversation_participants WHERE profile_id = auth.uid()
-));
-
-CREATE POLICY "Send messages" 
-ON public.messages FOR INSERT 
-WITH CHECK (conversation_id IN (
-    SELECT conversation_id FROM public.conversation_participants WHERE profile_id = auth.uid()
-));
-
--- -----------------------------------------------------------------------------
--- 14. TRIGGERS & FUNCTIONS
--- -----------------------------------------------------------------------------
-
-[cite_start]-- Auto-create profile on Auth Signup [cite: 38, 39]
-CREATE OR REPLACE FUNCTION public.handle_new_user() 
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, role)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name', (new.raw_user_meta_data->>'role')::public.app_role);
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
-[cite_start]-- Auto-update updated_at timestamp [cite: 40, 41]
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-   NEW.updated_at = NOW();
-   RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_profiles_modtime BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
-CREATE TRIGGER update_challenges_modtime BEFORE UPDATE ON public.challenges FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+CREATE TABLE public.milestones (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  challenge_id uuid,
+  sequence_order integer NOT NULL,
+  title text NOT NULL,
+  description text,
+  due_date timestamp with time zone,
+  requires_github boolean DEFAULT false,
+  requires_url boolean DEFAULT false,
+  requires_text boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT milestones_pkey PRIMARY KEY (id),
+  CONSTRAINT milestones_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id)
+);
+CREATE TABLE public.organizations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  description text,
+  industry text,
+  website text,
+  logo_url text,
+  is_verified boolean DEFAULT false,
+  verification_status text DEFAULT 'pending'::text,
+  max_seats integer DEFAULT 5,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'pending'::text,
+  CONSTRAINT organizations_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  avatar_url text,
+  bio text,
+  role USER-DEFINED DEFAULT 'student'::app_role,
+  university text,
+  degree text,
+  graduation_year integer,
+  resume_link text,
+  linkedin_url text,
+  github_url text,
+  organization_id uuid,
+  embedding USER-DEFINED,
+  max_active_challenges integer DEFAULT 3,
+  withdrawal_cooldown_until timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  first_name text,
+  last_name text,
+  address_house_no text,
+  address_street text,
+  address_barangay text,
+  address_city text,
+  address_zip text,
+  address_country text,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+  CONSTRAINT profiles_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.skills (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL UNIQUE,
+  category text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT skills_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.student_skills (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  profile_id uuid,
+  skill_id uuid,
+  level USER-DEFINED NOT NULL,
+  CONSTRAINT student_skills_pkey PRIMARY KEY (id),
+  CONSTRAINT student_skills_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT student_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.skills(id)
+);
+CREATE TABLE public.submissions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  milestone_id uuid,
+  participant_id uuid,
+  github_link text,
+  demo_url text,
+  written_response text,
+  submitted_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT submissions_pkey PRIMARY KEY (id),
+  CONSTRAINT submissions_milestone_id_fkey FOREIGN KEY (milestone_id) REFERENCES public.milestones(id),
+  CONSTRAINT submissions_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.challenge_participants(id)
+);
+CREATE TABLE public.team_members (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  team_id uuid,
+  profile_id uuid UNIQUE,
+  joined_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT team_members_pkey PRIMARY KEY (id),
+  CONSTRAINT team_members_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
+  CONSTRAINT team_members_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.teams (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  join_code text DEFAULT SUBSTRING(md5((random())::text) FROM 0 FOR 8) UNIQUE,
+  leader_id uuid,
+  avatar_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT teams_pkey PRIMARY KEY (id),
+  CONSTRAINT teams_leader_id_fkey FOREIGN KEY (leader_id) REFERENCES public.profiles(id)
+);
