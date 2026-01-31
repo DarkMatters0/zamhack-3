@@ -7,7 +7,6 @@ import {
   Search,
   Briefcase,
   Users,
-  MessageSquare,
   User,
   Settings,
 } from "lucide-react"
@@ -19,7 +18,6 @@ const studentNavItems = [
   { href: "/challenges", label: "Browse Challenges", icon: Search },
   { href: "/my-challenges", label: "My Challenges", icon: Briefcase },
   { href: "/team", label: "My Team", icon: Users },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
@@ -59,5 +57,3 @@ export const StudentSidebar = () => {
     </div>
   )
 }
-
-

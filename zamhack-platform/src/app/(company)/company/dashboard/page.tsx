@@ -68,32 +68,36 @@ async function getCompanyDashboardData(): Promise<DashboardData> {
   // --- SELF-REPAIR LOGIC START ---
   // If the user has no organization_id, try to create/link one based on signup metadata
   if (!profile.organization_id && profile.role === "company_admin") {
-    const companyName = user.user_metadata?.company_name
+    // Fallback to "My Company" if metadata is missing to prevent crash
+    const companyName = user.user_metadata?.company_name || "My Company"
     
-    if (companyName) {
-      console.log(`[Auto-Fix] Attempting to create organization for user: ${user.id}`)
+    console.log(`[Auto-Fix] Attempting to create organization '${companyName}' for user: ${user.id}`)
+    
+    // 1. Try to create the organization
+    const { data: newOrg, error: createOrgError } = await supabase
+      .from("organizations")
+      .insert({ name: companyName })
+      .select("id")
+      .single()
+    
+    if (newOrg && !createOrgError) {
+      console.log(`[Auto-Fix] Organization created: ${newOrg.id}. Linking to profile...`)
       
-      // 1. Try to create the organization
-      const { data: newOrg, error: createOrgError } = await supabase
-        .from("organizations")
-        .insert({ name: companyName })
-        .select("id")
-        .single()
+      // 2. Link profile to the new organization
+      const { error: linkError } = await supabase
+        .from("profiles")
+        .update({ organization_id: newOrg.id })
+        .eq("id", user.id)
       
-      if (newOrg && !createOrgError) {
-        // 2. Link profile to the new organization
-        const { error: linkError } = await supabase
-          .from("profiles")
-          .update({ organization_id: newOrg.id })
-          .eq("id", user.id)
-        
-        if (!linkError) {
-          // Success! Update local variable so the rest of the page loads
-          profile.organization_id = newOrg.id
-        }
+      if (!linkError) {
+        console.log(`[Auto-Fix] Success! Profile linked.`)
+        // Success! Update local variable so the rest of the page loads
+        profile.organization_id = newOrg.id
       } else {
-        console.error("Failed to auto-create organization:", createOrgError)
+        console.error("[Auto-Fix] Failed to link profile:", JSON.stringify(linkError, null, 2))
       }
+    } else {
+      console.error("[Auto-Fix] Failed to auto-create organization:", JSON.stringify(createOrgError, null, 2))
     }
   }
   // --- SELF-REPAIR LOGIC END ---
@@ -117,7 +121,6 @@ async function getCompanyDashboardData(): Promise<DashboardData> {
     .from("challenges")
     .select("*")
     .eq("organization_id", profile.organization_id)
-    // FIX: Include 'draft' and 'pending_approval' so creators see their new work
     .in("status", ["approved", "in_progress", "draft", "pending_approval"])
     .order("created_at", { ascending: false })
 
@@ -304,8 +307,8 @@ export default async function CompanyDashboardPage() {
       case "approved": return "success"
       case "in_progress": return "default"
       case "under_review": return "warning"
-      case "draft": return "outline" // Added Draft visual
-      case "pending_approval": return "warning" // Added Pending visual
+      case "draft": return "outline"
+      case "pending_approval": return "warning"
       default: return "outline"
     }
   }

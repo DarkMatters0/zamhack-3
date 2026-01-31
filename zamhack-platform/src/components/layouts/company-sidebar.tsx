@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Briefcase,
   Search,
-  MessageSquare,
   Building2,
   HelpCircle,
   Settings,
@@ -18,7 +17,6 @@ const companyNavItems = [
   { href: "/company/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/company/challenges", label: "Challenges", icon: Briefcase },
   { href: "/company/talent", label: "Talent Search", icon: Search },
-  { href: "/company/messages", label: "Messages", icon: MessageSquare },
   { href: "/company/organization", label: "Org Settings", icon: Building2 },
   { href: "/company/support", label: "Admin Support", icon: HelpCircle },
   { href: "/company/settings", label: "Settings", icon: Settings },
@@ -59,5 +57,3 @@ export const CompanySidebar = () => {
     </div>
   )
 }
-
-
