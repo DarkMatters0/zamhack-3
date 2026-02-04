@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { SubmissionForm } from "@/components/submission-form"
-import { JoinChallengeDialog } from "@/components/join-challenge-dialog"
+import { JoinButton } from "@/components/join-button" // Updated import
 import { AlertCircle, CheckCircle2, Lock, MessageSquare, CreditCard, Clock } from "lucide-react"
 import Link from "next/link"
 
@@ -231,7 +231,7 @@ export default async function ChallengePage({
         <div className="md:col-span-2 space-y-4">
           <div>
             <Badge variant="outline" className="mb-2">
-              {challenge.category || challenge.industry || "General"}
+              {challenge.industry || "General"}
             </Badge>
             <h1 className="text-3xl font-bold">{challenge.title}</h1>
             <p className="text-lg text-muted-foreground mt-2">
@@ -329,17 +329,8 @@ export default async function ChallengePage({
                     </Link>
                   </Button>
                 ) : (
-                  // FREE FLOW
-                  <JoinChallengeDialog
-                    challengeId={id}
-                    userTeam={userTeam ? { 
-                      id: userTeam.id, 
-                      name: userTeam.name, 
-                      leader_id: userTeam.leader_id || "" 
-                    } : null}
-                    userId={userId}
-                    registrationClosed={isRegistrationClosed}
-                  />
+                  // FREE FLOW - Using the smart JoinButton component
+                  <JoinButton challengeId={id} isFull />
                 )}
               </div>
             </CardContent>
@@ -382,7 +373,7 @@ export default async function ChallengePage({
                         
                         {/* Status Badges */}
                         {milestone.status === "completed" && (
-                          <Badge variant="success" className="gap-1 pl-1 pr-2">
+                          <Badge variant="default" className="gap-1 pl-1 pr-2 bg-green-600 hover:bg-green-700">
                             <CheckCircle2 className="h-3 w-3" /> 
                             {milestone.evaluation ? "Graded" : "Submitted"}
                           </Badge>
@@ -402,10 +393,6 @@ export default async function ChallengePage({
                     </div>
                     
                     <div className="text-right">
-                      <div className="font-bold text-lg">
-                        {/* Safe access to points assuming it exists on type now, fallback to 0 */}
-                        {milestone.points || 0} <span className="text-sm font-normal text-muted-foreground">pts</span>
-                      </div>
                       {milestone.due_date && (
                         <p className="text-xs text-muted-foreground mt-1 font-medium">
                           Due: {new Date(milestone.due_date).toLocaleDateString()}
@@ -430,10 +417,8 @@ export default async function ChallengePage({
                       <SubmissionForm
                         milestoneId={milestone.id}
                         participantId={participant.id} 
-                        // Fix: Convert null to undefined for SubmissionForm prop type compatibility
                         teamId={userTeam?.id || undefined}
                         isTeamLeader={userTeam?.leader_id === userId}
-                        // Added requirement props from database
                         requiresGithub={milestone.requires_github}
                         requiresUrl={milestone.requires_url}
                         requiresText={milestone.requires_text}

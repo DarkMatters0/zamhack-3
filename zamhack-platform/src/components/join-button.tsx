@@ -1,77 +1,91 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { joinChallenge } from "@/app/challenges/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface JoinButtonProps {
   challengeId: string
-  registrationClosed?: boolean
+  isFull?: boolean // This is the prop that was missing
 }
 
-export const JoinButton = ({ challengeId, registrationClosed = false }: JoinButtonProps) => {
+export function JoinButton({ challengeId, isFull = false }: JoinButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  const [overlapWarning, setOverlapWarning] = useState<string | null>(null)
   const router = useRouter()
 
-  // Auto-dismiss toast after 3 seconds
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => {
-        setToast(null)
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [toast])
-
-  const handleJoin = async () => {
+  const handleJoin = async (force: boolean = false) => {
     setIsLoading(true)
-    setToast(null)
+    setOverlapWarning(null) // Reset dialog state if retrying
 
     try {
-      const result = await joinChallenge(challengeId)
+      const result = await joinChallenge(challengeId, force)
 
       if (result.error) {
-        setToast({ message: result.error, type: "error" })
-      } else {
-        setToast({ message: "Successfully joined!", type: "success" })
-        // Refresh the page to update the UI
+        toast.error(result.error)
+      } else if (result.status === "overlap_warning") {
+        // Trigger the dialog
+        setOverlapWarning(result.message || "Schedule overlap detected.")
+      } else if (result.success) {
+        toast.success("Successfully joined the challenge!")
         router.refresh()
+        router.push("/my-challenges") // Redirect to My Challenges
       }
     } catch (error) {
-      setToast({
-        message: error instanceof Error ? error.message : "An unexpected error occurred",
-        type: "error",
-      })
+      toast.error("Something went wrong.")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="relative">
-      <Button
-        className="w-full"
-        onClick={handleJoin}
-        disabled={isLoading || registrationClosed}
+    <>
+      <Button 
+        size="lg" 
+        className={isFull ? "w-full" : ""} 
+        onClick={() => handleJoin(false)} 
+        disabled={isLoading}
       >
-        {isLoading ? "Joining..." : registrationClosed ? "Registration Closed" : "Join Challenge"}
+        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Join Challenge
       </Button>
-      
-      {toast && (
-        <div
-          className={`absolute top-full left-0 right-0 mt-2 p-3 rounded-md text-sm ${
-            toast.type === "success"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : "bg-red-50 text-red-800 border border-red-200"
-          }`}
-          role="alert"
-        >
-          {toast.message}
-        </div>
-      )}
-    </div>
+
+      <AlertDialog open={!!overlapWarning} onOpenChange={(open) => !open && setOverlapWarning(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Schedule Conflict Detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              {overlapWarning}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault() // Prevent auto-close to show loading state
+                handleJoin(true)
+              }}
+              disabled={isLoading}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {isLoading ? "Joining..." : "Yes, Join Anyway"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
-
