@@ -7,8 +7,9 @@ import { Progress } from "@/components/ui/progress"
 import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Lock } from "lucide-react" // <--- ADDED THIS IMPORT
+import { Lock } from "lucide-react" // Added Lock icon
 import { submitChallengeForApproval } from "@/app/challenges/actions"
+// --- NEW IMPORT ---
 import { CloseChallengeButton } from "@/components/challenges/close-challenge-button"
 
 type Challenge = Database["public"]["Tables"]["challenges"]["Row"]
@@ -304,6 +305,7 @@ const getParticipantName = (participant: ParticipantWithProfile) => {
 
 const getParticipantEmail = (participant: ParticipantWithProfile) => {
   // Note: Email is not in profiles table, would need to join with auth.users
+  // For now, return a placeholder
   return "N/A"
 }
 
@@ -323,6 +325,7 @@ export default async function ChallengeManagementPage({
     data
 
   const isDraft = challenge.status === "draft"
+  // Check if the challenge is already in a closed state
   const isClosed = challenge.status === 'closed' || challenge.status === 'completed'
 
   return (
