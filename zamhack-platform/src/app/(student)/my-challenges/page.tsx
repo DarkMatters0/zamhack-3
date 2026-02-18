@@ -4,68 +4,58 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { Database } from "@/types/supabase"
+
+// Define the type to match ChallengeCard (must include organization)
+type ChallengeWithOrg = Database["public"]["Tables"]["challenges"]["Row"] & {
+  organization: {
+    name: string
+  } | null
+}
 
 export default async function MyChallengesPage() {
   const supabase = await createClient()
 
-  // Get current user
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) {
     redirect("/login")
   }
 
-  // Fetch user's challenge participants with challenge details
-  // Using the join syntax to get the related challenge data
-  const { data: participants, error: participantsError } = await supabase
+  // Fetch participations with nested challenge AND organization data
+  const { data: participations, error } = await supabase
     .from("challenge_participants")
     .select(`
       id,
-      challenge_id,
       status,
-      joined_at,
       challenge:challenges (
         *,
-        organization:organizations (*)
+        organization:organizations (
+          name
+        )
       )
     `)
     .eq("user_id", user.id)
     .order("joined_at", { ascending: false })
 
-  if (participantsError) {
-    console.error("Error fetching participants:", participantsError)
+  if (error) {
+    console.error("Error fetching my challenges:", error)
   }
 
-  // Process data to flat lists
-  const activeChallenges: any[] = []
-  const completedChallenges: any[] = []
+  const allParticipations = participations || []
 
-  participants?.forEach((p) => {
-    // Check if challenge data exists (it might be null if challenge was deleted)
-    if (!p.challenge) return
+  // Filter and flatten the data
+  const activeChallenges = allParticipations
+    .filter((p) => p.status === "active" && p.challenge)
+    .map((p) => p.challenge as unknown as ChallengeWithOrg)
 
-    // Type casting for safety if needed, though Supabase types usually handle this
-    const challengeData = p.challenge as any
+  const pastChallenges = allParticipations
+    .filter((p) => p.status !== "active" && p.challenge)
+    .map((p) => p.challenge as unknown as ChallengeWithOrg)
 
-    // Categorize based on Participant status OR Challenge status
-    // Usually "completed" means the user finished it, or the challenge itself is closed.
-    const isCompleted = p.status === "completed" || challengeData.status === "completed"
-
-    if (isCompleted) {
-      completedChallenges.push(challengeData)
-    } else {
-      activeChallenges.push(challengeData)
-    }
-  })
-
-  const hasAnyChallenges = activeChallenges.length > 0 || completedChallenges.length > 0
+  const hasAnyChallenges = activeChallenges.length > 0 || pastChallenges.length > 0
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">My Challenges</h1>
         <p className="text-muted-foreground">
@@ -91,8 +81,8 @@ export default async function MyChallengesPage() {
             <TabsTrigger value="active">
               Active ({activeChallenges.length})
             </TabsTrigger>
-            <TabsTrigger value="completed">
-              Completed ({completedChallenges.length})
+            <TabsTrigger value="past">
+              Past ({pastChallenges.length})
             </TabsTrigger>
           </TabsList>
 
@@ -107,32 +97,31 @@ export default async function MyChallengesPage() {
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {activeChallenges.map((challenge) => (
-                  <ChallengeCard
-                    key={challenge.id}
-                    challenge={challenge}
-                    href={`/challenges/${challenge.id}`}
-                    // Removed 'progress' prop as it's not supported by ChallengeCard
+                  <ChallengeCard 
+                    key={challenge.id} 
+                    challenge={challenge} 
+                    // REMOVED: href prop (handled internally by component)
                   />
                 ))}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="completed" className="mt-6">
-            {completedChallenges.length === 0 ? (
+          <TabsContent value="past" className="mt-6">
+            {pastChallenges.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card p-12 text-center text-muted-foreground">
-                <p className="text-lg font-medium">No completed challenges</p>
+                <p className="text-lg font-medium">No past challenges</p>
                 <p className="text-sm mt-2">
                   Your completed challenges will appear here.
                 </p>
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {completedChallenges.map((challenge) => (
-                  <ChallengeCard
-                    key={challenge.id}
+                {pastChallenges.map((challenge) => (
+                  <ChallengeCard 
+                    key={challenge.id} 
                     challenge={challenge}
-                    href={`/challenges/${challenge.id}`}
+                    // REMOVED: href prop
                   />
                 ))}
               </div>
