@@ -1,111 +1,108 @@
 import { createClient } from "@/utils/supabase/server"
-import { redirect } from "next/navigation"
 import { ChallengeCard } from "@/components/challenge-card"
 import { ChallengeFilters } from "@/components/challenge-filters"
-import { Telescope } from "lucide-react"
+import { Database } from "@/types/supabase"
+import { redirect } from "next/navigation"
 
-interface DashboardProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+// Define the type to match what ChallengeCard expects (joined organization)
+type ChallengeWithOrg = Database["public"]["Tables"]["challenges"]["Row"] & {
+  organization: {
+    name: string
+  } | null
 }
 
-export default async function StudentDashboard({ searchParams }: DashboardProps) {
+interface ChallengesPageProps {
+  searchParams: Promise<{
+    q?: string
+    difficulty?: string
+    status?: string
+  }>
+}
+
+async function getChallenges(searchParams: {
+  q?: string
+  difficulty?: string
+  status?: string
+}): Promise<ChallengeWithOrg[]> {
   const supabase = await createClient()
-  const params = await searchParams
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Authenticate
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) {
+    redirect("/login")
+  }
 
-  if (!user) redirect("/login")
-
-  // Extract params
-  const q = typeof params.q === "string" ? params.q : ""
-  const category = typeof params.category === "string" ? params.category : ""
-  const sort = typeof params.sort === "string" ? params.sort : "newest"
-
-  // 1. Base Query
+  // Build query with organization join
   let query = supabase
     .from("challenges")
-    .select(`
-      *,
-      organization:organizations(name)
-    `)
-    // Filter out draft/pending challenges immediately
-    .neq("status", "draft")
-    .neq("status", "pending_approval")
-    // FIX: Cast "rejected" to any to bypass TS error until types are regenerated
-    .neq("status", "rejected" as any)
+    .select("*, organization:organizations(name)")
 
-  // 2. Apply Search (Title or Description)
-  if (q) {
-    query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+  // 1. Search Filter
+  if (searchParams.q) {
+    const term = searchParams.q.trim()
+    if (term) {
+      query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`)
+    }
   }
 
-  // 3. Apply Category Filter (Mapping to 'industry' column)
-  if (category && category !== "all") {
-    // ilike allows for partial matches e.g. "Tech" matching "Technology"
-    query = query.ilike("industry", `%${category}%`)
+  // 2. Difficulty Filter
+  if (searchParams.difficulty) {
+    query = query.eq("difficulty", searchParams.difficulty as any)
   }
 
-  // 4. Apply Sorting
-  switch (sort) {
-    case "closing_soon":
-      // Order by registration deadline, nearest first.
-      // Only show challenges that haven't passed the deadline yet.
-      query = query
-        .gt("registration_deadline", new Date().toISOString())
-        .order("registration_deadline", { ascending: true })
-      break
-    case "participants_high":
-      // Sort by max_participants as a proxy for scale/popularity
-      query = query.order("max_participants", { ascending: false })
-      break
-    case "newest":
-    default:
-      query = query.order("created_at", { ascending: false })
-      break
+  // 3. Status Filter (Default to active/completed/closed if not specified)
+  if (searchParams.status) {
+    query = query.eq("status", searchParams.status as any)
+  } else {
+    // Show open, in_progress, and closed challenges
+    query = query.in("status", ["approved", "in_progress", "closed", "completed"])
   }
 
-  const { data: challenges, error } = await query
+  // Order results
+  query = query.order("created_at", { ascending: false })
+
+  const { data, error } = await query
 
   if (error) {
     console.error("Error fetching challenges:", error)
+    return []
   }
 
+  return (data as unknown as ChallengeWithOrg[]) || []
+}
+
+export default async function ChallengesPage({ searchParams }: ChallengesPageProps) {
+  const params = await searchParams
+  const challenges = await getChallenges(params)
+
   return (
-    <div className="space-y-8 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Explore Challenges</h1>
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Browse Challenges</h1>
         <p className="text-muted-foreground">
-          Find the perfect project to build your portfolio and win prizes.
+          Discover and join challenges that match your skills and interests.
         </p>
       </div>
 
-      {/* Filter Component */}
+      {/* Filters */}
       <ChallengeFilters />
 
-      {/* Results Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {challenges?.map((challenge) => (
-          <ChallengeCard 
-            key={challenge.id} 
-            challenge={challenge} 
-            href={`/challenges/${challenge.id}`}
-            // We pass showStatus=true by default, but the component handles hiding 'Approved' internally now
-          />
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {(!challenges || challenges.length === 0) && (
-        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-xl bg-slate-50 dark:bg-slate-900/50">
-          <div className="bg-white p-4 rounded-full shadow-sm mb-4 dark:bg-slate-800">
-            <Telescope className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold">No challenges found</h3>
-          <p className="text-muted-foreground max-w-sm mt-2">
-            We couldn't find any challenges matching your filters. Try adjusting your search terms or category.
-          </p>
+      {/* Grid */}
+      {challenges.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card p-12 text-center text-muted-foreground">
+          <p className="text-lg font-medium">No challenges found</p>
+          <p className="text-sm">Try adjusting your filters or search query.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {challenges.map((challenge) => (
+            <ChallengeCard 
+              key={challenge.id} 
+              challenge={challenge} 
+              // REMOVED: href={`/challenges/${challenge.id}`}  <-- The component handles this internally
+            />
+          ))}
         </div>
       )}
     </div>
