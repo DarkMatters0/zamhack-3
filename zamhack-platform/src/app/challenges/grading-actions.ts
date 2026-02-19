@@ -9,13 +9,13 @@ type EvaluationUpdate = Database["public"]["Tables"]["evaluations"]["Update"]
 
 export async function submitEvaluation(
   submissionId: string,
-  rubricScores: { rubric_id: string; score: number }[], // CHANGED: Now accepts array of rubric scores
+  rubricScores: { rubric_id: string; score: number }[],
   feedback: string,
-  isDraft: boolean
+  isDraft: boolean,
+  directScore?: number  // NEW: used when no rubrics are defined
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
-  // Get current user
   const {
     data: { user },
     error: userError,
@@ -25,7 +25,6 @@ export async function submitEvaluation(
     return { success: false, error: "Not authenticated" }
   }
 
-  // Verify user is company admin or member
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id, role, organization_id")
@@ -40,7 +39,6 @@ export async function submitEvaluation(
     return { success: false, error: "Unauthorized: Only company members can evaluate submissions" }
   }
 
-  // Fetch submission to get challenge info
   const { data: submission, error: submissionError } = await supabase
     .from("submissions")
     .select("id, milestone_id, participant_id")
@@ -55,7 +53,6 @@ export async function submitEvaluation(
     return { success: false, error: "Submission is not linked to a milestone" }
   }
 
-  // Get milestone to get challenge_id
   const { data: milestone, error: milestoneError } = await supabase
     .from("milestones")
     .select("challenge_id")
@@ -66,7 +63,6 @@ export async function submitEvaluation(
     return { success: false, error: "Milestone not found" }
   }
 
-  // Get challenge to verify organization ownership
   const { data: challenge, error: challengeError } = await supabase
     .from("challenges")
     .select("id, organization_id")
@@ -77,15 +73,16 @@ export async function submitEvaluation(
     return { success: false, error: "Challenge not found" }
   }
 
-  // Verify user's organization owns this challenge
   if (challenge.organization_id !== profile.organization_id) {
     return { success: false, error: "Unauthorized: You can only evaluate submissions for your organization's challenges" }
   }
 
-  // --- NEW LOGIC: Calculate Total Score ---
-  const totalScore = rubricScores.reduce((sum, item) => sum + item.score, 0)
+  // If directScore is provided (no rubrics), use it directly.
+  // Otherwise sum up rubric scores.
+  const totalScore = directScore !== undefined
+    ? directScore
+    : rubricScores.reduce((sum, item) => sum + item.score, 0)
 
-  // Check if evaluation already exists
   const { data: existingEvaluation } = await supabase
     .from("evaluations")
     .select("id")
@@ -95,7 +92,7 @@ export async function submitEvaluation(
   const evaluationData: EvaluationInsert | EvaluationUpdate = {
     submission_id: submissionId,
     reviewer_id: user.id,
-    score: totalScore, // Insert calculated total score
+    score: totalScore,
     feedback: feedback,
     is_draft: isDraft,
     updated_at: new Date().toISOString(),
@@ -104,7 +101,6 @@ export async function submitEvaluation(
   let error: { error: string } | null = null
 
   if (existingEvaluation) {
-    // Update existing evaluation
     const { error: updateError } = await supabase
       .from("evaluations")
       .update(evaluationData)
@@ -114,7 +110,6 @@ export async function submitEvaluation(
       error = { error: updateError.message || "Failed to update evaluation" }
     }
   } else {
-    // Insert new evaluation
     const { error: insertError } = await supabase
       .from("evaluations")
       .insert(evaluationData)
@@ -128,15 +123,12 @@ export async function submitEvaluation(
     return { success: false, error: error.error }
   }
 
-  // --- NEW LOGIC: Save Detailed Rubric Scores ---
-  
-  // 1. Delete old scores for this submission to avoid duplicates when re-grading
+  // Save detailed rubric scores (only if rubrics were used)
   await supabase
-    .from("scores" as any) // Casting as any to avoid TS errors
+    .from("scores" as any)
     .delete()
     .eq("submission_id", submissionId)
 
-  // 2. Insert the new detailed scores
   if (rubricScores.length > 0) {
     const scoreRows = rubricScores.map((s) => ({
       submission_id: submissionId,
@@ -145,7 +137,7 @@ export async function submitEvaluation(
     }))
 
     const { error: scoresError } = await supabase
-      .from("scores" as any) // Casting as any
+      .from("scores" as any)
       .insert(scoreRows)
 
     if (scoresError) {
@@ -154,7 +146,6 @@ export async function submitEvaluation(
     }
   }
 
-  // Revalidate the challenge page
   revalidatePath(`/company/challenges/${milestone.challenge_id}`)
 
   return { success: true }

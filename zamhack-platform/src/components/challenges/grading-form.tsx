@@ -20,7 +20,7 @@ type Evaluation = Database["public"]["Tables"]["evaluations"]["Row"]
 type Rubric = Database["public"]["Tables"]["rubrics"]["Row"]
 type Score = Database["public"]["Tables"]["scores"]["Row"]
 
-// Zod schema for dynamic rubrics array
+// --- Schema for rubric-based grading ---
 const gradingSchema = z.object({
   rubricScores: z.array(
     z.object({
@@ -30,7 +30,6 @@ const gradingSchema = z.object({
       score: z.number().min(0, "Score cannot be negative"),
     })
   ).superRefine((data, ctx) => {
-    // Check max points for each rubric item
     data.forEach((item, index) => {
       if (item.score > item.max_points) {
         ctx.addIssue({
@@ -45,7 +44,15 @@ const gradingSchema = z.object({
   isDraft: z.boolean().default(false),
 })
 
+// --- Schema for simple (no rubric) grading ---
+const simpleGradingSchema = z.object({
+  score: z.number().min(0, "Score cannot be negative").max(100, "Score cannot exceed 100"),
+  feedback: z.string().min(1, "Feedback is required"),
+  isDraft: z.boolean().default(false),
+})
+
 type GradingFormValues = z.infer<typeof gradingSchema>
+type SimpleGradingFormValues = z.infer<typeof simpleGradingSchema>
 
 interface GradingFormProps {
   submissionId: string
@@ -54,15 +61,145 @@ interface GradingFormProps {
   initialEvaluation?: Evaluation | null
 }
 
-export const GradingForm = ({ 
-  submissionId, 
-  rubrics, 
-  existingScores, 
-  initialEvaluation 
+// --- Simple Score Form (no rubrics defined) ---
+function SimpleGradingForm({
+  submissionId,
+  initialEvaluation,
+}: {
+  submissionId: string
+  initialEvaluation?: Evaluation | null
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const form = useForm<SimpleGradingFormValues>({
+    resolver: zodResolver(simpleGradingSchema),
+    defaultValues: {
+      score: initialEvaluation?.score ?? 0,
+      feedback: initialEvaluation?.feedback ?? "",
+      isDraft: initialEvaluation?.is_draft ?? false,
+    },
+  })
+
+  const onSubmit = async (data: SimpleGradingFormValues, isDraftOverride?: boolean) => {
+    setIsSubmitting(true)
+    try {
+      const finalIsDraft = isDraftOverride !== undefined ? isDraftOverride : data.isDraft
+
+      // Pass empty rubric scores array — grading-actions will use the direct score
+      const result = await submitEvaluation(
+        submissionId,
+        [],
+        data.feedback,
+        finalIsDraft,
+        data.score
+      )
+
+      if (result.success) {
+        toast.success(finalIsDraft ? "Draft saved successfully" : "Evaluation submitted successfully")
+        window.location.reload()
+      } else {
+        toast.error(result.error || "Failed to submit evaluation")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("An unexpected error occurred")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="space-y-6">
+      {/* Direct Score Input */}
+      <div className="space-y-2">
+        <Label htmlFor="score" className="text-base font-semibold">
+          Score <span className="text-muted-foreground font-normal">(out of 100)</span>
+        </Label>
+        <div className="flex items-center gap-4">
+          <Input
+            id="score"
+            type="number"
+            min={0}
+            max={100}
+            className="w-28 text-lg font-bold"
+            {...form.register("score", { valueAsNumber: true })}
+          />
+          <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary/60 transition-all duration-300"
+              style={{ width: `${Math.min(form.watch("score") || 0, 100)}%` }}
+            />
+          </div>
+          <span className="text-muted-foreground text-sm w-12 text-right">
+            {form.watch("score") || 0} / 100
+          </span>
+        </div>
+        {form.formState.errors.score && (
+          <p className="text-xs text-destructive">{form.formState.errors.score.message}</p>
+        )}
+      </div>
+
+      {/* Feedback */}
+      <div className="space-y-2">
+        <Label htmlFor="feedback">Overall Feedback *</Label>
+        <Textarea
+          id="feedback"
+          {...form.register("feedback")}
+          placeholder="Provide detailed, constructive feedback..."
+          rows={6}
+        />
+        {form.formState.errors.feedback && (
+          <p className="text-xs text-destructive">{form.formState.errors.feedback.message}</p>
+        )}
+      </div>
+
+      {/* Draft checkbox */}
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="isDraft"
+          checked={form.watch("isDraft")}
+          onCheckedChange={(checked) => form.setValue("isDraft", checked as boolean)}
+        />
+        <Label htmlFor="isDraft" className="text-sm font-normal cursor-pointer">
+          Save as Draft
+        </Label>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isSubmitting}
+          onClick={() => form.handleSubmit((data) => onSubmit(data, true))()}
+          className="flex-1"
+        >
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Save Draft
+        </Button>
+        <Button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => form.handleSubmit((data) => onSubmit(data, false))()}
+          className="flex-1"
+        >
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Submit Evaluation
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// --- Main Grading Form (rubric-based) ---
+export const GradingForm = ({
+  submissionId,
+  rubrics,
+  existingScores,
+  initialEvaluation,
 }: GradingFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Map rubrics to initial form values
   const defaultRubricScores = rubrics.map(rubric => {
     const existing = existingScores.find(s => s.rubric_id === rubric.id)
     return {
@@ -87,7 +224,6 @@ export const GradingForm = ({
     name: "rubricScores",
   })
 
-  // Watch scores to calculate the live total
   const watchedScores = form.watch("rubricScores")
   const currentTotal = watchedScores.reduce((sum, item) => sum + (Number(item.score) || 0), 0)
   const maxTotal = rubrics.reduce((sum, r) => sum + (r.max_points || 10), 0)
@@ -96,26 +232,16 @@ export const GradingForm = ({
     setIsSubmitting(true)
     try {
       const finalIsDraft = isDraftOverride !== undefined ? isDraftOverride : data.isDraft
-      
-      // Clean up payload for the server action
+
       const submissionScores = data.rubricScores.map(item => ({
         rubric_id: item.rubric_id,
-        score: item.score
+        score: item.score,
       }))
 
-      const result = await submitEvaluation(
-        submissionId,
-        submissionScores,
-        data.feedback,
-        finalIsDraft
-      )
+      const result = await submitEvaluation(submissionId, submissionScores, data.feedback, finalIsDraft)
 
       if (result.success) {
-        toast.success(
-          finalIsDraft
-            ? "Draft saved successfully"
-            : "Evaluation submitted successfully"
-        )
+        toast.success(finalIsDraft ? "Draft saved successfully" : "Evaluation submitted successfully")
         window.location.reload()
       } else {
         toast.error(result.error || "Failed to submit evaluation")
@@ -134,14 +260,17 @@ export const GradingForm = ({
         <CardTitle>Scorecard</CardTitle>
       </CardHeader>
       <CardContent>
+        {/* --- NO RUBRICS: show simple score form --- */}
         {rubrics.length === 0 ? (
-           <div className="text-center py-6 text-muted-foreground">
-             No rubrics have been defined for this challenge.
-           </div>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground pb-2 border-b">
+              No rubrics have been defined for this challenge. Enter a direct score out of 100.
+            </p>
+            <SimpleGradingForm submissionId={submissionId} initialEvaluation={initialEvaluation} />
+          </div>
         ) : (
+          /* --- HAS RUBRICS: rubric-based form --- */
           <form onSubmit={form.handleSubmit((data) => onSubmit(data))} className="space-y-8">
-            
-            {/* Dynamic Rubric Inputs */}
             <div className="space-y-6">
               {fields.map((field, index) => (
                 <div key={field.id} className="space-y-2 border-b pb-4 last:border-0">
@@ -151,7 +280,7 @@ export const GradingForm = ({
                       Max: {field.max_points} pts
                     </span>
                   </div>
-                  
+
                   <div className="flex items-start gap-4">
                     <div className="w-24 space-y-1">
                       <Input
@@ -166,11 +295,10 @@ export const GradingForm = ({
                         </p>
                       )}
                     </div>
-                    
-                    {/* Visual Progress Bar indicator */}
+
                     <div className="flex-1 h-2 mt-4 bg-secondary rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary/50 transition-all duration-300" 
+                      <div
+                        className="h-full bg-primary/50 transition-all duration-300"
                         style={{ width: `${Math.min((watchedScores[index]?.score || 0) / field.max_points * 100, 100)}%` }}
                       />
                     </div>
@@ -179,7 +307,6 @@ export const GradingForm = ({
               ))}
             </div>
 
-            {/* Total Score Display */}
             <div className="bg-muted/30 p-4 rounded-lg border flex justify-between items-center">
               <span className="font-bold text-lg">Total Score</span>
               <div className="text-2xl font-bold">
@@ -188,7 +315,6 @@ export const GradingForm = ({
               </div>
             </div>
 
-            {/* Feedback Section */}
             <div className="space-y-2">
               <Label htmlFor="feedback">Overall Feedback *</Label>
               <Textarea
@@ -198,9 +324,7 @@ export const GradingForm = ({
                 rows={6}
               />
               {form.formState.errors.feedback && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.feedback.message}
-                </p>
+                <p className="text-xs text-destructive">{form.formState.errors.feedback.message}</p>
               )}
             </div>
 
@@ -208,40 +332,32 @@ export const GradingForm = ({
               <Checkbox
                 id="isDraft"
                 checked={form.watch("isDraft")}
-                onCheckedChange={(checked) =>
-                  form.setValue("isDraft", checked as boolean)
-                }
+                onCheckedChange={(checked) => form.setValue("isDraft", checked as boolean)}
               />
               <Label htmlFor="isDraft" className="text-sm font-normal cursor-pointer">
                 Save as Draft
               </Label>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3 pt-4">
-              <Button
-                type="button"
-                variant="default"
-                disabled={isSubmitting}
-                onClick={() => {
-                  form.handleSubmit((data) => onSubmit(data, false))()
-                }}
-                className="flex-1"
-              >
-                {isSubmitting && !form.watch("isDraft") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Submit Final Review
-              </Button>
               <Button
                 type="button"
                 variant="outline"
                 disabled={isSubmitting}
-                onClick={() => {
-                  form.handleSubmit((data) => onSubmit(data, true))()
-                }}
+                onClick={() => form.handleSubmit((data) => onSubmit(data, true))()}
                 className="flex-1"
               >
-                {isSubmitting && form.watch("isDraft") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Draft
+              </Button>
+              <Button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => form.handleSubmit((data) => onSubmit(data, false))()}
+                className="flex-1"
+              >
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Submit Evaluation
               </Button>
             </div>
           </form>
