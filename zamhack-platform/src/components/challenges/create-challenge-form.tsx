@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
@@ -7,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { format, isAfter, isBefore, startOfDay } from "date-fns"
 import { CalendarIcon, Plus, Trash2, ChevronRight, ChevronLeft, X } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,7 +19,6 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { createChallenge } from "@/app/challenges/create-actions"
 import { toast } from "sonner"
-
 // --- Schemas ---
 const milestoneSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -33,7 +30,6 @@ const milestoneSchema = z.object({
   requiresUrl: z.boolean().default(false),
   requiresText: z.boolean().default(false),
 })
-
 const formSchema = z.object({
   // Step 1: Basic Info
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -59,22 +55,17 @@ const formSchema = z.object({
   // Step 4: Skills
   skills: z.array(z.string()).min(1, "Add at least one skill"),
 })
-
 type FormValues = z.infer<typeof formSchema>
-
 const INDUSTRIES = ["Technology", "Finance", "Healthcare", "Education", "E-commerce", "Other"]
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"]
 const TYPES = ["solo", "team", "both"]
 const CURRENCIES = ["PHP", "USD", "EUR", "GBP"]
-
 const STEPS = ["Basic Info", "Timeline", "Milestones", "Skills", "Review"]
-
 export const CreateChallengeForm = ({ organizationId }: { organizationId: string }) => {
   const [currentStep, setCurrentStep] = useState(1)
   const [skillsInput, setSkillsInput] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -87,14 +78,11 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
     },
     mode: "onChange", 
   })
-
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "milestones",
   })
-
   const watchedValues = form.watch()
-
   // --- Validation Logic ---
   const validateStep = async (step: number) => {
     let fieldsToValidate: any[] = []
@@ -124,13 +112,11 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
     
     const isFieldsValid = await form.trigger(fieldsToValidate)
     if (!isFieldsValid) return false
-
     // Date Logic Checks
     if (step === 2) {
       const start = form.getValues("startDate")
       const end = form.getValues("endDate")
       const reg = form.getValues("registrationDeadline")
-
       if (isAfter(start, end) || start.getTime() === end.getTime()) {
         form.setError("endDate", { message: "End date must be after start date" })
         return false
@@ -141,7 +127,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
          return false
       }
     }
-
     if (step === 3) {
       const start = startOfDay(form.getValues("startDate"))
       const end = startOfDay(form.getValues("endDate"))
@@ -166,10 +151,8 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
         return false
       }
     }
-
     return true
   }
-
   const handleNext = async (e: React.MouseEvent) => {
     e.preventDefault()
     const isValid = await validateStep(currentStep)
@@ -177,12 +160,10 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
       setCurrentStep((prev) => Math.min(prev + 1, STEPS.length))
     }
   }
-
   const handlePrevious = (e: React.MouseEvent) => {
     e.preventDefault()
     setCurrentStep((prev) => Math.max(prev - 1, 1))
   }
-
   // --- Skills Input Logic ---
   const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
@@ -197,7 +178,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
       setSkillsInput(val)
     }
   }
-
   const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault()
@@ -213,17 +193,14 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
       }
     }
   }
-
   const removeSkill = (skillToRemove: string) => {
     const currentSkills = form.getValues("skills")
     form.setValue("skills", currentSkills.filter((s) => s !== skillToRemove))
   }
-
   // --- Submission ---
   const onSubmit = async (data: FormValues) => {
     // FIX: Guard Clause to prevent premature submission
     if (currentStep !== STEPS.length) return
-
     setIsSubmitting(true)
     try {
       const result = await createChallenge({
@@ -242,7 +219,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
         })),
         organizationId,
       })
-
       if (result.success) {
         toast.success("Challenge created successfully!")
         router.push("/company/dashboard")
@@ -257,14 +233,12 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
       setIsSubmitting(false)
     }
   }
-
   // Global Enter prevention
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
       e.preventDefault()
     }
   }
-
   return (
     <div className="space-y-8">
       {/* Stepper */}
@@ -291,7 +265,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
           )
         })}
       </div>
-
       <Card>
         <CardHeader>
           <CardTitle>{STEPS[currentStep - 1]}</CardTitle>
@@ -309,21 +282,29 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Challenge Title</Label>
-                  <Input {...form.register("title")} placeholder="e.g. AI Customer Support Bot" />
+                  <Input
+                    {...form.register("title")}
+                    title="Challenge Title"
+                    placeholder="e.g. AI Customer Support Bot"
+                  />
                   {form.formState.errors.title && <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>}
                 </div>
                 
                 <div className="space-y-2">
                   <Label>Description</Label>
-                  <Textarea {...form.register("description")} placeholder="Describe the challenge..." rows={5} />
+                  <Textarea
+                    {...form.register("description")}
+                    title="Description"
+                    placeholder="Describe the challenge..."
+                    rows={5}
+                  />
                   {form.formState.errors.description && <p className="text-xs text-destructive">{form.formState.errors.description.message}</p>}
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Industry</Label>
                     <Select onValueChange={(val) => form.setValue("industry", val)} defaultValue={watchedValues.industry}>
-                      <SelectTrigger>
+                      <SelectTrigger title="Industry">
                         <SelectValue placeholder="Select industry" />
                       </SelectTrigger>
                       <SelectContent>
@@ -332,11 +313,10 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     </Select>
                     {form.formState.errors.industry && <p className="text-xs text-destructive">{form.formState.errors.industry.message}</p>}
                   </div>
-
                   <div className="space-y-2">
                     <Label>Difficulty</Label>
                     <Select onValueChange={(val: any) => form.setValue("difficulty", val)} defaultValue={watchedValues.difficulty}>
-                      <SelectTrigger>
+                      <SelectTrigger title="Difficulty">
                         <SelectValue placeholder="Select difficulty" />
                       </SelectTrigger>
                       <SelectContent>
@@ -345,7 +325,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     </Select>
                   </div>
                 </div>
-
                 <div className="space-y-2">
                     <Label>Participation Type</Label>
                     <div className="flex gap-4">
@@ -353,7 +332,8 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                             <div key={type} className="flex items-center space-x-2">
                                 <input 
                                     type="radio" 
-                                    id={type} 
+                                    id={type}
+                                    title={`Participation type: ${type}`}
                                     value={type}
                                     checked={watchedValues.participationType === type}
                                     onChange={() => form.setValue("participationType", type as any)}
@@ -364,26 +344,39 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         ))}
                     </div>
                 </div>
-
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label>Max Participants</Label>
-                        <Input type="number" {...form.register("maxParticipants")} placeholder="50" />
+                        <Input
+                          type="number"
+                          {...form.register("maxParticipants")}
+                          title="Max Participants"
+                          placeholder="50"
+                        />
                     </div>
                     {(watchedValues.participationType === "team" || watchedValues.participationType === "both") && (
                         <>
                             <div className="space-y-2">
                                 <Label>Max Teams</Label>
-                                <Input type="number" {...form.register("maxTeams")} placeholder="20" />
+                                <Input
+                                  type="number"
+                                  {...form.register("maxTeams")}
+                                  title="Max Teams"
+                                  placeholder="20"
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>Max Team Size</Label>
-                                <Input type="number" {...form.register("maxTeamSize")} placeholder="4" />
+                                <Input
+                                  type="number"
+                                  {...form.register("maxTeamSize")}
+                                  title="Max Team Size"
+                                  placeholder="4"
+                                />
                             </div>
                         </>
                     )}
                 </div>
-
                 <div className="space-y-4 pt-4 border-t">
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
@@ -407,7 +400,8 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                                 <Label>Entry Fee Amount</Label>
                                 <Input 
                                     type="number" 
-                                    {...form.register("entryFeeAmount")} 
+                                    {...form.register("entryFeeAmount")}
+                                    title="Entry Fee Amount"
                                     placeholder="0.00"
                                     step="0.01"
                                     min="0"
@@ -424,7 +418,7 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                                     onValueChange={(val) => form.setValue("currency", val)} 
                                     defaultValue={watchedValues.currency || "PHP"}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger title="Currency">
                                         <SelectValue placeholder="Select currency" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -439,7 +433,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                 </div>
               </div>
             )}
-
             {/* STEP 2: TIMELINE */}
             {currentStep === 2 && (
               <div className="space-y-6">
@@ -459,7 +452,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         </Popover>
                         {form.formState.errors.startDate && <p className="text-xs text-destructive">{form.formState.errors.startDate.message}</p>}
                     </div>
-
                     <div className="space-y-2 flex flex-col">
                         <Label>End Date</Label>
                         <Popover>
@@ -482,7 +474,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         Error: End date cannot be before the start date.
                     </div>
                 )}
-
                 <div className="space-y-2">
                     <Label>Registration Deadline (Optional)</Label>
                     <Popover>
@@ -519,7 +510,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                 </div>
               </div>
             )}
-
             {/* STEP 3: MILESTONES */}
             {currentStep === 3 && (
                 <div className="space-y-6">
@@ -537,7 +527,11 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Title</Label>
-                                    <Input {...form.register(`milestones.${index}.title`)} placeholder="e.g. Project Proposal" />
+                                    <Input
+                                      {...form.register(`milestones.${index}.title`)}
+                                      title="Milestone Title"
+                                      placeholder="e.g. Project Proposal"
+                                    />
                                     {form.formState.errors.milestones?.[index]?.title && <p className="text-xs text-destructive">{form.formState.errors.milestones[index]?.title?.message}</p>}
                                 </div>
                                 <div className="space-y-2 flex flex-col">
@@ -556,19 +550,20 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                                     {form.formState.errors.milestones?.[index]?.dueDate && <p className="text-xs text-destructive">{form.formState.errors.milestones[index]?.dueDate?.message}</p>}
                                 </div>
                             </div>
-
                             <div className="space-y-2">
                                 <Label>Description (Optional)</Label>
-                                <Input {...form.register(`milestones.${index}.description`)} />
+                                <Input
+                                  {...form.register(`milestones.${index}.description`)}
+                                  title="Milestone Description"
+                                  placeholder="Briefly describe what's expected"
+                                />
                             </div>
-
                             <div className="space-y-2">
                                 <Label>Submission Requirements</Label>
                                 <div className="flex gap-4">
                                     <div className="flex items-center space-x-2">
                                         <Checkbox 
                                             id={`github-${index}`} 
-                                            // FIX: Default to false to satisfy strictly boolean checked prop
                                             checked={watchedValues.milestones[index]?.requiresGithub || false} 
                                             onCheckedChange={(checked) => form.setValue(`milestones.${index}.requiresGithub`, checked as boolean)} 
                                         />
@@ -599,7 +594,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     </Button>
                 </div>
             )}
-
             {/* STEP 4: SKILLS */}
             {currentStep === 4 && (
                 <div className="space-y-4">
@@ -607,6 +601,7 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         <Label>Required Skills</Label>
                         <p className="text-sm text-muted-foreground">Type a skill and press Enter or Comma to add.</p>
                         <Input 
+                            title="Required Skills"
                             value={skillsInput}
                             onChange={handleSkillsChange}
                             onKeyDown={handleSkillKeyDown}
@@ -618,15 +613,19 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         {watchedValues.skills.map((skill) => (
                             <Badge key={skill} variant="secondary" className="px-3 py-1 text-sm flex items-center gap-1">
                                 {skill}
-                                <button type="button" onClick={() => removeSkill(skill)} className="hover:text-destructive">
-                                    <X className="h-3 w-3" />
+                                <button
+                                  type="button"
+                                  title={`Remove ${skill}`}
+                                  onClick={() => removeSkill(skill)}
+                                  className="hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
                                 </button>
                             </Badge>
                         ))}
                     </div>
                 </div>
             )}
-
             {/* STEP 5: REVIEW */}
             {currentStep === 5 && (
                 <div className="space-y-6">
@@ -667,7 +666,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     </div>
                 </div>
             )}
-
             {/* BUTTONS */}
             <div className="flex justify-between pt-4">
                 <Button
@@ -679,7 +677,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     <ChevronLeft className="mr-2 h-4 w-4" />
                     Previous
                 </Button>
-
                 {currentStep < STEPS.length ? (
                     <Button key="next-button" type="button" onClick={handleNext}>
                         Next <ChevronRight className="ml-2 h-4 w-4" />
@@ -690,14 +687,12 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     </Button>
                 )}
             </div>
-
           </form>
         </CardContent>
       </Card>
     </div>
   )
 }
-
 // Helper Badge Component
 function Badge({ children, variant, className }: any) {
     return <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", className, variant === "secondary" ? "border-transparent bg-secondary text-secondary-foreground" : "text-foreground")}>{children}</span>
