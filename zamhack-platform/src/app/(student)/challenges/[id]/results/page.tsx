@@ -11,7 +11,8 @@ import Link from "next/link"
 interface WinnerData {
   rank: number
   prize: string | null
-  profile_id: string // needed to match with participant scores
+  score: number | null  // ← FIX: read stored score directly from winners table
+  profile_id: string
   profile: {
     first_name: string | null
     last_name: string | null
@@ -66,12 +67,13 @@ export default async function ChallengeResultsPage({
     )
   }
 
-  // 2. Fetch Winners — include profile_id so we can match scores below
+  // 2. Fetch Winners — now includes `score` stored at close/recalculate time
   const { data } = await supabase
     .from("winners")
     .select(`
       rank,
       prize,
+      score,
       profile_id,
       profile:profiles (first_name, last_name, avatar_url, university)
     `)
@@ -113,11 +115,15 @@ export default async function ChallengeResultsPage({
     })
     .sort((a, b) => b.totalScore - a.totalScore)
 
-  // Attach computed score to each winner for the podium display
+  // Attach score to each winner for the podium display.
+  // Priority: stored score from winners table (reliable) → live computed score (fallback)
   const winnersWithScore = (winners ?? []).map((w) => ({
     ...w,
     totalScore:
-      allParticipants.find((p) => p.user_id === w.profile_id)?.totalScore ?? 0,
+      // ← FIX: use stored score first; only fall back to live computation if null
+      w.score ??
+      allParticipants.find((p) => p.user_id === w.profile_id)?.totalScore ??
+      0,
   }))
 
   const getRankConfig = (rank: number) => {
@@ -138,7 +144,7 @@ export default async function ChallengeResultsPage({
           color: "text-slate-600",
           bg: "bg-gradient-to-b from-slate-50 to-slate-100/60 border-slate-200",
           iconColor: "text-slate-400",
-          icon: Medal, // FIX: was Ribbon, which doesn't exist in lucide-react
+          icon: Medal,
           badgeBg: "bg-black/90 text-white hover:bg-black/80",
           heightClass: "md:min-h-[19rem]",
           scale: "scale-100",
@@ -149,7 +155,7 @@ export default async function ChallengeResultsPage({
           color: "text-amber-700",
           bg: "bg-gradient-to-b from-orange-50 to-orange-100/60 border-orange-200",
           iconColor: "text-amber-600",
-          icon: Award, // FIX: was Ribbon, which doesn't exist in lucide-react
+          icon: Award,
           badgeBg: "bg-black/90 text-white hover:bg-black/80",
           heightClass: "md:min-h-[17rem]",
           scale: "scale-100",
@@ -260,7 +266,7 @@ export default async function ChallengeResultsPage({
                     {profile?.university}
                   </p>
 
-                  {/* Total score */}
+                  {/* Total score — sourced from winners.score, not live computation */}
                   <div
                     className={`mt-3 text-2xl font-extrabold ${config.scoreColor}`}
                   >
