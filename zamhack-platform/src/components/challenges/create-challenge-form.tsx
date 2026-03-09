@@ -402,7 +402,7 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                                     type="number" 
                                     {...form.register("entryFeeAmount")}
                                     title="Entry Fee Amount"
-                                    placeholder="0.00"
+                                    placeholder="100.00"
                                     step="0.01"
                                     min="0"
                                 />

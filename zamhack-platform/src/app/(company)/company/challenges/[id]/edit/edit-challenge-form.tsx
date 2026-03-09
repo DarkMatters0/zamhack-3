@@ -309,7 +309,7 @@ export default function EditChallengeForm({ challenge }: { challenge: any }) {
           <Field label="Entry Fee Amount">
             <input
               title="Entry Fee Amount"
-              placeholder="0.00"
+              placeholder="100.00"
               type="number"
               className={inputCls}
               value={entryFee}
