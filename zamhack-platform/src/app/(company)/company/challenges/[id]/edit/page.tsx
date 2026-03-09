@@ -7,17 +7,19 @@ import EditChallengeForm from "./edit-challenge-form";
 export default async function EditChallengePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;  // ← FIX: params is a Promise in Next.js 15+
 }) {
+  const { id } = await params;  // ← FIX: await it before accessing id
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const challenge = await getChallengeForEdit(params.id);
+  const challenge = await getChallengeForEdit(id);
   if (!challenge) notFound();
 
   // Only the creator can edit
-  if (challenge.created_by !== user.id) redirect(`/company/challenges/${params.id}`);
+  if (challenge.created_by !== user.id) redirect(`/company/challenges/${id}`);
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
