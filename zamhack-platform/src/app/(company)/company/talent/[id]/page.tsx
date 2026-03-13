@@ -166,43 +166,48 @@ export default async function ParticipantProfilePage({
         Back to Talent Search
       </Link>
 
-      {/* ── Hero — no overflow:hidden so avatar overlaps banner ── */}
+      {/* ── Hero ── */}
       <div style={{
         background: "var(--cp-white)",
         border: "1px solid var(--cp-border)",
         borderRadius: "var(--cp-radius-xl)",
         boxShadow: "var(--cp-shadow-sm)",
+        position: "relative",  /* avatar is positioned relative to this */
       }}>
+        {/* Banner — overflow:hidden is safe here because avatar lives outside it */}
         <div style={{
           height: "110px",
           borderRadius: "var(--cp-radius-xl) var(--cp-radius-xl) 0 0",
           background: "linear-gradient(135deg, #2C3E50 0%, #3D5166 55%, rgba(255,155,135,0.6) 100%)",
-          position: "relative",
           overflow: "hidden",
         }}>
           <div style={{ position: "absolute", top: -40, right: -10, width: 160, height: 160, background: "rgba(255,155,135,0.2)", borderRadius: "50%", filter: "blur(45px)" }} />
           <div style={{ position: "absolute", bottom: -50, left: "40%", width: 130, height: 130, background: "rgba(255,255,255,0.06)", borderRadius: "50%", filter: "blur(35px)" }} />
         </div>
 
+        {/* Avatar — absolutely placed so it straddles the banner edge, never clipped */}
+        <div style={{ position: "absolute", top: "66px", left: "1.75rem" }}>
+          {profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt={fullName}
+              style={{ width: "88px", height: "88px", borderRadius: "50%", border: "3px solid #fff", boxShadow: "0 2px 12px rgba(44,62,80,0.18)", objectFit: "cover", display: "block" }}
+            />
+          ) : (
+            <div style={{
+              width: "88px", height: "88px", borderRadius: "50%",
+              border: "3px solid #fff", boxShadow: "0 2px 12px rgba(44,62,80,0.18)",
+              background: gradient, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1.875rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em",
+            }}>
+              {initials}
+            </div>
+          )}
+        </div>
+
         <div style={{ padding: "0 1.75rem 1.75rem" }}>
-          <div style={{ marginTop: "-44px", marginBottom: "0.875rem" }}>
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={fullName}
-                style={{ width: "88px", height: "88px", borderRadius: "50%", border: "3px solid #fff", boxShadow: "0 2px 12px rgba(44,62,80,0.18)", objectFit: "cover", display: "block" }}
-              />
-            ) : (
-              <div style={{
-                width: "88px", height: "88px", borderRadius: "50%",
-                border: "3px solid #fff", boxShadow: "0 2px 12px rgba(44,62,80,0.18)",
-                background: gradient, display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "1.875rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em",
-              }}>
-                {initials}
-              </div>
-            )}
-          </div>
+          {/* Spacer so content starts below the avatar */}
+          <div style={{ height: "60px" }} />
 
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
