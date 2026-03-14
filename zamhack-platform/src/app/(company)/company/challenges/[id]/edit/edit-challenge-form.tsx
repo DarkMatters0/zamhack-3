@@ -9,10 +9,9 @@ import {
 } from "@/app/challenges/edit-actions";
 import { Constants } from "@/types/supabase";
 
-// Pulled directly from generated Supabase constants — always in sync with DB.
 const STATUSES = Constants.public.Enums.challenge_status;
 const DIFFICULTIES = Constants.public.Enums.proficiency_level;
-const INDUSTRIES = ["Technology", "Finance", "Healthcare", "Education", "Other"] as const;
+const INDUSTRIES = ["Technology", "Finance", "Healthcare", "Education", "E-commerce", "Other"] as const;
 const PARTICIPATION_TYPES = ["solo", "team", "both"] as const;
 
 export default function EditChallengeForm({
@@ -26,10 +25,26 @@ export default function EditChallengeForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Basic fields
   const [title, setTitle] = useState<string>(challenge.title ?? "");
   const [description, setDescription] = useState<string>(challenge.description ?? "");
   const [problemBrief, setProblemBrief] = useState<string>(challenge.problem_brief ?? "");
-  const [industry, setIndustry] = useState<string>(challenge.industry ?? "");
+
+  // Industries: load from array, fall back to legacy single industry string
+  const [industries, setIndustries] = useState<string[]>(() => {
+    if (Array.isArray(challenge.industries) && challenge.industries.length > 0) {
+      return challenge.industries;
+    }
+    if (challenge.industry) return [challenge.industry];
+    return [];
+  });
+
+  function toggleIndustry(value: string) {
+    setIndustries((prev) =>
+      prev.includes(value) ? prev.filter((i) => i !== value) : [...prev, value]
+    );
+  }
+
   const [difficulty, setDifficulty] = useState<UpdateChallengeInput["difficulty"]>(
     challenge.difficulty ?? "beginner"
   );
@@ -42,14 +57,30 @@ export default function EditChallengeForm({
   const [maxParticipants, setMaxParticipants] = useState<number>(challenge.max_participants ?? 50);
   const [maxTeams, setMaxTeams] = useState<number>(challenge.max_teams ?? 20);
   const [maxTeamSize, setMaxTeamSize] = useState<number>(challenge.max_team_size ?? 4);
+
+  // Perpetual toggle
+  const [isPerpetual, setIsPerpetual] = useState<boolean>(!!challenge.is_perpetual);
+
+  // Dates
   const [startDate, setStartDate] = useState<string>(toDatetimeLocal(challenge.start_date));
   const [endDate, setEndDate] = useState<string>(toDatetimeLocal(challenge.end_date));
   const [registrationDeadline, setRegistrationDeadline] = useState<string>(
     toDatetimeLocal(challenge.registration_deadline)
   );
+
+  // Location
+  const [locationType, setLocationType] = useState<"online" | "onsite" | "">(
+    challenge.location_type ?? ""
+  );
+  const [locationDetails, setLocationDetails] = useState<string>(
+    challenge.location_details ?? ""
+  );
+
+  // Entry fee
   const [entryFee, setEntryFee] = useState<number>(challenge.entry_fee_amount ?? 0);
   const [currency, setCurrency] = useState<string>(challenge.currency ?? "PHP");
 
+  // Milestones
   const [milestones, setMilestones] = useState<MilestoneInput[]>(
     (challenge.milestones ?? [])
       .sort((a: any, b: any) => a.sequence_order - b.sequence_order)
@@ -100,7 +131,7 @@ export default function EditChallengeForm({
         title,
         description,
         problem_brief: problemBrief,
-        industry,
+        industries,
         difficulty,
         status,
         participation_type: participationType,
@@ -112,10 +143,12 @@ export default function EditChallengeForm({
         registration_deadline: registrationDeadline,
         entry_fee_amount: entryFee,
         currency,
+        is_perpetual: isPerpetual,
+        location_type: locationType || null,
+        location_details: locationType === "onsite" ? locationDetails : null,
         milestones,
       });
 
-      // Navigate client-side — avoids NEXT_REDIRECT being caught as an error
       router.push(result.redirectTo);
       router.refresh();
     } catch (err: any) {
@@ -170,18 +203,24 @@ export default function EditChallengeForm({
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Industry">
-            <select
-              title="Industry"
-              className={inputCls}
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-            >
-              <option value="">Select industry</option>
-              {INDUSTRIES.map((i) => (
-                <option key={i} value={i}>{i}</option>
+          {/* Industries — multi-checkbox */}
+          <Field label="Industries">
+            <div className="flex flex-wrap gap-3 pt-1">
+              {INDUSTRIES.map((ind) => (
+                <label key={ind} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={industries.includes(ind)}
+                    onChange={() => toggleIndustry(ind)}
+                    className="accent-orange-500 w-4 h-4"
+                  />
+                  <span className="text-sm">{ind}</span>
+                </label>
               ))}
-            </select>
+            </div>
+            {industries.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">Select at least one industry.</p>
+            )}
           </Field>
 
           <Field label="Difficulty">
@@ -189,9 +228,7 @@ export default function EditChallengeForm({
               title="Difficulty"
               className={inputCls}
               value={difficulty}
-              onChange={(e) =>
-                setDifficulty(e.target.value as UpdateChallengeInput["difficulty"])
-              }
+              onChange={(e) => setDifficulty(e.target.value as UpdateChallengeInput["difficulty"])}
             >
               {DIFFICULTIES.map((d) => (
                 <option key={d} value={d}>{d}</option>
@@ -211,9 +248,7 @@ export default function EditChallengeForm({
               title="Status"
               className={inputCls}
               value={status}
-              onChange={(e) =>
-                setStatus(e.target.value as UpdateChallengeInput["status"])
-              }
+              onChange={(e) => setStatus(e.target.value as UpdateChallengeInput["status"])}
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -227,9 +262,7 @@ export default function EditChallengeForm({
               className={inputCls}
               value={participationType}
               onChange={(e) =>
-                setParticipationType(
-                  e.target.value as UpdateChallengeInput["participation_type"]
-                )
+                setParticipationType(e.target.value as UpdateChallengeInput["participation_type"])
               }
             >
               {PARTICIPATION_TYPES.map((t) => (
@@ -280,7 +313,32 @@ export default function EditChallengeForm({
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Dates</h2>
 
-        <div className="grid grid-cols-3 gap-4">
+        {/* Perpetual toggle */}
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div
+            onClick={() => setIsPerpetual((v) => !v)}
+            className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer ${
+              isPerpetual ? "bg-orange-500" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                isPerpetual ? "translate-x-5" : "translate-x-1"
+              }`}
+            />
+          </div>
+          <span className="text-sm font-medium text-gray-700">
+            Perpetual challenge (no end date, open-ended)
+          </span>
+        </label>
+
+        {isPerpetual && (
+          <p className="text-sm text-orange-600">
+            Perpetual challenges remain open until manually closed. No end date required.
+          </p>
+        )}
+
+        <div className={`grid grid-cols-3 gap-4 ${isPerpetual ? "opacity-50 pointer-events-none" : ""}`}>
           <Field label="Start Date">
             <input
               title="Start Date"
@@ -288,6 +346,7 @@ export default function EditChallengeForm({
               className={inputCls}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              disabled={isPerpetual}
             />
           </Field>
           <Field label="End Date">
@@ -297,6 +356,7 @@ export default function EditChallengeForm({
               className={inputCls}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
+              disabled={isPerpetual}
             />
           </Field>
           <Field label="Registration Deadline">
@@ -306,12 +366,52 @@ export default function EditChallengeForm({
               className={inputCls}
               value={registrationDeadline}
               onChange={(e) => setRegistrationDeadline(e.target.value)}
+              disabled={isPerpetual}
             />
           </Field>
         </div>
       </section>
 
-      {/* ── Prize / Reward ── */}
+      {/* ── Location ── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">Location</h2>
+
+        <Field label="Challenge Format">
+          <select
+            title="Location Type"
+            className={inputCls}
+            value={locationType}
+            onChange={(e) => setLocationType(e.target.value as "online" | "onsite" | "")}
+          >
+            <option value="">Not specified</option>
+            <option value="online">Online</option>
+            <option value="onsite">Onsite</option>
+          </select>
+        </Field>
+
+        {locationType === "onsite" && (
+          <Field label="Location Details">
+            <input
+              title="Location Details"
+              placeholder="e.g. Ateneo de Davao University, Davao City"
+              className={inputCls}
+              value={locationDetails}
+              onChange={(e) => setLocationDetails(e.target.value)}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter the full venue address or name where the challenge will be held.
+            </p>
+          </Field>
+        )}
+
+        {locationType === "online" && (
+          <p className="text-sm text-blue-600">
+            Students can participate from anywhere. No physical attendance required.
+          </p>
+        )}
+      </section>
+
+      {/* ── Prize / Entry Fee ── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Prize / Entry Fee</h2>
 
@@ -319,23 +419,25 @@ export default function EditChallengeForm({
           <Field label="Entry Fee Amount">
             <input
               title="Entry Fee Amount"
-              placeholder="100.00"
+              placeholder="0"
               type="number"
               className={inputCls}
               value={entryFee}
               onChange={(e) => setEntryFee(Number(e.target.value))}
               min={0}
-              step="0.01"
             />
           </Field>
           <Field label="Currency">
-            <input
+            <select
               title="Currency"
-              placeholder="PHP"
               className={inputCls}
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-            />
+            >
+              <option value="PHP">PHP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
           </Field>
         </div>
       </section>
@@ -347,20 +449,20 @@ export default function EditChallengeForm({
           <button
             type="button"
             onClick={addMilestone}
-            className="text-sm text-orange-600 hover:underline font-medium"
+            className="text-sm text-orange-600 hover:text-orange-700 font-medium"
           >
             + Add Milestone
           </button>
         </div>
 
         {milestones.map((m, i) => (
-          <div key={i} className="border rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-500">Milestone {i + 1}</span>
+          <div key={i} className="border rounded-lg p-4 space-y-3 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-600">Milestone {i + 1}</span>
               <button
                 type="button"
                 onClick={() => removeMilestone(i)}
-                className="text-xs text-red-500 hover:underline"
+                className="text-xs text-red-500 hover:text-red-700"
               >
                 Remove
               </button>
@@ -369,18 +471,17 @@ export default function EditChallengeForm({
             <Field label="Title">
               <input
                 title="Milestone Title"
-                placeholder="Milestone Title"
+                placeholder="e.g. Project Proposal"
                 className={inputCls}
                 value={m.title}
                 onChange={(e) => updateMilestone(i, "title", e.target.value)}
-                required
               />
             </Field>
 
             <Field label="Description">
               <textarea
                 title="Milestone Description"
-                placeholder="Milestone Description"
+                placeholder="Describe what students need to submit"
                 className={inputCls}
                 rows={2}
                 value={m.description}
@@ -402,7 +503,6 @@ export default function EditChallengeForm({
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  title="Requires GitHub"
                   checked={m.requires_github}
                   onChange={(e) => updateMilestone(i, "requires_github", e.target.checked)}
                 />
@@ -411,7 +511,6 @@ export default function EditChallengeForm({
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  title="Requires URL"
                   checked={m.requires_url}
                   onChange={(e) => updateMilestone(i, "requires_url", e.target.checked)}
                 />
@@ -420,7 +519,6 @@ export default function EditChallengeForm({
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  title="Requires Text"
                   checked={m.requires_text}
                   onChange={(e) => updateMilestone(i, "requires_text", e.target.checked)}
                 />

@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -198,7 +198,11 @@ export type Database = {
           end_date: string | null
           entry_fee_amount: number | null
           id: string
+          industries: string[] | null
           industry: string | null
+          is_perpetual: boolean
+          location_details: string | null
+          location_type: string | null
           max_participants: number | null
           max_team_size: number | null
           max_teams: number | null
@@ -221,7 +225,11 @@ export type Database = {
           end_date?: string | null
           entry_fee_amount?: number | null
           id?: string
+          industries?: string[] | null
           industry?: string | null
+          is_perpetual?: boolean
+          location_details?: string | null
+          location_type?: string | null
           max_participants?: number | null
           max_team_size?: number | null
           max_teams?: number | null
@@ -244,7 +252,11 @@ export type Database = {
           end_date?: string | null
           entry_fee_amount?: number | null
           id?: string
+          industries?: string[] | null
           industry?: string | null
+          is_perpetual?: boolean
+          location_details?: string | null
+          location_type?: string | null
           max_participants?: number | null
           max_team_size?: number | null
           max_teams?: number | null

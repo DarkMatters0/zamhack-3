@@ -5,20 +5,14 @@ import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 
 // ==========================================
-// ORGANIZATION ACTIONS (Existing)
+// ORGANIZATION ACTIONS
 // ==========================================
 
 export async function approveOrganization(orgId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect("/login")
-  }
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) redirect("/login")
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -26,39 +20,25 @@ export async function approveOrganization(orgId: string) {
     .eq("id", user.id)
     .single()
 
-  if (profileError || !profile) {
-    return { success: false, error: "Profile not found" }
-  }
-
-  if (profile.role !== "admin") {
-    return { success: false, error: "Unauthorized: Admin access required" }
-  }
+  if (profileError || !profile) return { success: false, error: "Profile not found" }
+  if (profile.role !== "admin") return { success: false, error: "Unauthorized: Admin access required" }
 
   const { error: updateError } = await supabase
     .from("organizations")
     .update({ status: "active" })
     .eq("id", orgId)
 
-  if (updateError) {
-    return { success: false, error: updateError.message || "Failed to approve organization" }
-  }
+  if (updateError) return { success: false, error: updateError.message || "Failed to approve organization" }
 
   revalidatePath("/admin/dashboard")
-
   return { success: true }
 }
 
 export async function rejectOrganization(orgId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect("/login")
-  }
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) redirect("/login")
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -66,30 +46,22 @@ export async function rejectOrganization(orgId: string) {
     .eq("id", user.id)
     .single()
 
-  if (profileError || !profile) {
-    return { success: false, error: "Profile not found" }
-  }
-
-  if (profile.role !== "admin") {
-    return { success: false, error: "Unauthorized: Admin access required" }
-  }
+  if (profileError || !profile) return { success: false, error: "Profile not found" }
+  if (profile.role !== "admin") return { success: false, error: "Unauthorized: Admin access required" }
 
   const { error: updateError } = await supabase
     .from("organizations")
     .update({ status: "rejected" })
     .eq("id", orgId)
 
-  if (updateError) {
-    return { success: false, error: updateError.message || "Failed to reject organization" }
-  }
+  if (updateError) return { success: false, error: updateError.message || "Failed to reject organization" }
 
   revalidatePath("/admin/dashboard")
-
   return { success: true }
 }
 
 // ==========================================
-// CHALLENGE ACTIONS (Existing)
+// CHALLENGE ACTIONS
 // ==========================================
 
 export async function approveChallenge(challengeId: string) {
@@ -143,17 +115,12 @@ export async function rejectChallenge(challengeId: string) {
 }
 
 // ==========================================
-// PENDING EDIT ACTIONS (New)
+// PENDING EDIT ACTIONS
 // ==========================================
 
-/**
- * Approve a pending edit — applies the stored payload directly to the
- * challenge and its milestones, then marks the edit record as approved.
- */
 export async function approvePendingEdit(pendingEditId: string) {
   const supabase = await createClient()
 
-  // 1. Verify admin
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Unauthorized")
 
@@ -165,7 +132,6 @@ export async function approvePendingEdit(pendingEditId: string) {
 
   if (profile?.role !== "admin") throw new Error("Unauthorized")
 
-  // 2. Fetch the pending edit
   const { data: pendingEdit, error: fetchError } = await supabase
     .from("challenge_pending_edits")
     .select("*")
@@ -178,32 +144,47 @@ export async function approvePendingEdit(pendingEditId: string) {
   const payload = pendingEdit.payload as any
   const challengeId = pendingEdit.challenge_id
 
-  // 3. Apply challenge-level fields from the payload
+  // Apply core challenge fields (original columns — always work)
   const { error: challengeError } = await supabase
     .from("challenges")
     .update({
       title: payload.title,
       description: payload.description,
       problem_brief: payload.problem_brief,
-      industry: payload.industry,
+      industry: payload.industries?.[0] ?? payload.industry ?? null,
       difficulty: payload.difficulty,
       status: payload.status,
       participation_type: payload.participation_type,
       max_participants: payload.max_participants,
       max_teams: payload.max_teams,
       max_team_size: payload.max_team_size,
-      start_date: payload.start_date || null,
-      end_date: payload.end_date || null,
-      registration_deadline: payload.registration_deadline || null,
+      start_date: payload.is_perpetual ? null : (payload.start_date || null),
+      end_date: payload.is_perpetual ? null : (payload.end_date || null),
+      registration_deadline: payload.is_perpetual ? null : (payload.registration_deadline || null),
       entry_fee_amount: payload.entry_fee_amount,
       currency: payload.currency,
       updated_at: new Date().toISOString(),
-    })
+    } as any)
     .eq("id", challengeId)
 
-  if (challengeError) throw new Error("Failed to apply challenge edits")
+  if (challengeError) throw new Error(`Failed to apply challenge edits: ${challengeError.message}`)
 
-  // 4. Apply milestone changes from the payload
+  // Apply new columns separately (industries, location, perpetual)
+  const { error: newFieldsError } = await supabase
+    .from("challenges")
+    .update({
+      industries: payload.industries ?? [],
+      is_perpetual: payload.is_perpetual ?? false,
+      location_type: payload.location_type ?? null,
+      location_details: payload.location_type === "onsite"
+        ? (payload.location_details ?? null)
+        : null,
+    } as any)
+    .eq("id", challengeId)
+
+  if (newFieldsError) throw new Error(`Failed to apply new fields: ${newFieldsError.message}`)
+
+  // Apply milestone changes
   for (const milestone of payload.milestones ?? []) {
     if (milestone.id) {
       await supabase
@@ -232,7 +213,7 @@ export async function approvePendingEdit(pendingEditId: string) {
     }
   }
 
-  // 5. Mark the pending edit as approved
+  // Mark as approved
   await supabase
     .from("challenge_pending_edits")
     .update({
@@ -244,16 +225,12 @@ export async function approvePendingEdit(pendingEditId: string) {
 
   revalidatePath(`/admin/challenges/${challengeId}`)
   revalidatePath(`/company/challenges/${challengeId}`)
+  revalidatePath(`/challenges/${challengeId}`)
 }
 
-/**
- * Reject a pending edit — marks it as rejected with an optional note.
- * The live challenge is left completely untouched.
- */
 export async function rejectPendingEdit(pendingEditId: string, adminNote?: string) {
   const supabase = await createClient()
 
-  // 1. Verify admin
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Unauthorized")
 
@@ -265,7 +242,6 @@ export async function rejectPendingEdit(pendingEditId: string, adminNote?: strin
 
   if (profile?.role !== "admin") throw new Error("Unauthorized")
 
-  // 2. Fetch the pending edit to get the challenge_id for revalidation
   const { data: pendingEdit, error: fetchError } = await supabase
     .from("challenge_pending_edits")
     .select("challenge_id, status")
@@ -275,7 +251,6 @@ export async function rejectPendingEdit(pendingEditId: string, adminNote?: strin
   if (fetchError || !pendingEdit) throw new Error("Pending edit not found")
   if (pendingEdit.status !== "pending") throw new Error("Edit has already been reviewed")
 
-  // 3. Mark as rejected
   const { error } = await supabase
     .from("challenge_pending_edits")
     .update({
