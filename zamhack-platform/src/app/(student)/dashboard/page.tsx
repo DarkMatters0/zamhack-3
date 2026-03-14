@@ -74,10 +74,18 @@ async function getChallenges(searchParams: {
     query = query.gt("entry_fee_amount", 0)
   }
 
-  // 6. Industry / Category
-  if (searchParams.category && searchParams.category !== "all") {
-    query = query.eq("industry", searchParams.category)
-  }
+
+//  6. Industry / Category — multi-select (comma-separated)
+   if (searchParams.category) {
+    const categories = searchParams.category
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean)
+     if (categories.length > 0) {
+       query = query.in("industry", categories)
+    }
+   }
+
 
   // 7. Sort
   if (searchParams.sort === "closing_soon") {
