@@ -15,13 +15,9 @@ export default async function AdminChallengeDetailsPage({
   const { id } = await params
   const supabase = await createClient()
 
-  // 1. Fetch Challenge Data with Organization
   const { data: challenge, error } = await supabase
     .from("challenges")
-    .select(`
-      *,
-      organization:organizations(*)
-    `)
+    .select(`*, organization:organizations(*)`)
     .eq("id", id)
     .single()
 
@@ -29,7 +25,6 @@ export default async function AdminChallengeDetailsPage({
     return <div>Challenge not found</div>
   }
 
-  // 2. Fetch pending edits for this challenge
   const { data: pendingEdits } = await supabase
     .from("challenge_pending_edits")
     .select("*")
@@ -37,7 +32,6 @@ export default async function AdminChallengeDetailsPage({
     .eq("status", "pending")
     .order("created_at", { ascending: false })
 
-  // 3. Helper for formatting
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A"
     return new Date(dateString).toLocaleDateString()
@@ -48,9 +42,22 @@ export default async function AdminChallengeDetailsPage({
     return new Date(dateString).toLocaleString()
   }
 
+  // Helper: display industries array or fallback to single industry string
+  const displayIndustries = (val: any): string => {
+    if (Array.isArray(val) && val.length > 0) return val.join(", ")
+    if (typeof val === "string" && val) return val
+    return "—"
+  }
+
+  // Current challenge industries
+  const currentIndustries = displayIndustries(
+    (challenge as any).industries?.length
+      ? (challenge as any).industries
+      : challenge.industry
+  )
+
   return (
     <div className="container max-w-4xl py-8 space-y-8">
-      {/* Back Button */}
       <Button variant="ghost" asChild className="pl-0 hover:bg-transparent hover:text-primary">
         <Link href="/admin/dashboard" className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -58,7 +65,6 @@ export default async function AdminChallengeDetailsPage({
         </Link>
       </Button>
 
-      {/* Header with Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -66,12 +72,11 @@ export default async function AdminChallengeDetailsPage({
             <Badge variant="outline">{challenge.status}</Badge>
           </div>
           <p className="text-muted-foreground flex items-center gap-2">
-            By <span className="font-semibold text-foreground">{challenge.organization?.name}</span>
+            By <span className="font-semibold text-foreground">{(challenge as any).organization?.name}</span>
             • {formatDate(challenge.created_at)}
           </p>
         </div>
 
-        {/* Approval Actions — only for fresh pending_approval challenges */}
         {challenge.status === "pending_approval" && (
           <div className="flex items-center gap-3">
             <form action={async () => {
@@ -112,6 +117,12 @@ export default async function AdminChallengeDetailsPage({
           <CardContent className="space-y-4">
             {pendingEdits.map((edit) => {
               const payload = edit.payload as any
+
+              // Proposed industries
+              const proposedIndustries = displayIndustries(
+                payload.industries?.length ? payload.industries : payload.industry
+              )
+
               return (
                 <div key={edit.id} className="rounded-lg border border-yellow-200 bg-white p-4 space-y-4">
                   <div className="flex items-center justify-between">
@@ -123,18 +134,26 @@ export default async function AdminChallengeDetailsPage({
                     </Badge>
                   </div>
 
-                  {/* Show a diff-style summary of what changed */}
+                  {/* Diff grid */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
+                    {/* Current */}
                     <div className="space-y-2">
                       <p className="font-semibold text-muted-foreground uppercase text-xs">Current</p>
                       <p><span className="text-muted-foreground">Title:</span> {challenge.title}</p>
                       <p><span className="text-muted-foreground">Status:</span> {challenge.status}</p>
-                      <p><span className="text-muted-foreground">Industry:</span> {challenge.industry ?? "—"}</p>
+                      <p><span className="text-muted-foreground">Industries:</span> {currentIndustries}</p>
                       <p><span className="text-muted-foreground">Difficulty:</span> {challenge.difficulty ?? "—"}</p>
                       <p><span className="text-muted-foreground">Max Participants:</span> {challenge.max_participants ?? "—"}</p>
+                      <p><span className="text-muted-foreground">Perpetual:</span> {(challenge as any).is_perpetual ? "Yes" : "No"}</p>
                       <p><span className="text-muted-foreground">Start Date:</span> {formatDate(challenge.start_date)}</p>
                       <p><span className="text-muted-foreground">End Date:</span> {formatDate(challenge.end_date)}</p>
+                      <p><span className="text-muted-foreground">Location:</span> {(challenge as any).location_type ?? "—"}</p>
+                      {(challenge as any).location_type === "onsite" && (
+                        <p><span className="text-muted-foreground">Venue:</span> {(challenge as any).location_details ?? "—"}</p>
+                      )}
                     </div>
+
+                    {/* Proposed */}
                     <div className="space-y-2">
                       <p className="font-semibold text-muted-foreground uppercase text-xs">Proposed</p>
                       <p className={payload.title !== challenge.title ? "text-yellow-700 font-medium" : ""}>
@@ -143,8 +162,8 @@ export default async function AdminChallengeDetailsPage({
                       <p className={payload.status !== challenge.status ? "text-yellow-700 font-medium" : ""}>
                         <span className="text-muted-foreground">Status:</span> {payload.status}
                       </p>
-                      <p className={payload.industry !== challenge.industry ? "text-yellow-700 font-medium" : ""}>
-                        <span className="text-muted-foreground">Industry:</span> {payload.industry ?? "—"}
+                      <p className={proposedIndustries !== currentIndustries ? "text-yellow-700 font-medium" : ""}>
+                        <span className="text-muted-foreground">Industries:</span> {proposedIndustries}
                       </p>
                       <p className={payload.difficulty !== challenge.difficulty ? "text-yellow-700 font-medium" : ""}>
                         <span className="text-muted-foreground">Difficulty:</span> {payload.difficulty ?? "—"}
@@ -152,12 +171,23 @@ export default async function AdminChallengeDetailsPage({
                       <p className={payload.max_participants !== challenge.max_participants ? "text-yellow-700 font-medium" : ""}>
                         <span className="text-muted-foreground">Max Participants:</span> {payload.max_participants ?? "—"}
                       </p>
+                      <p className={!!payload.is_perpetual !== !!(challenge as any).is_perpetual ? "text-yellow-700 font-medium" : ""}>
+                        <span className="text-muted-foreground">Perpetual:</span> {payload.is_perpetual ? "Yes" : "No"}
+                      </p>
                       <p className={payload.start_date !== challenge.start_date ? "text-yellow-700 font-medium" : ""}>
                         <span className="text-muted-foreground">Start Date:</span> {formatDate(payload.start_date)}
                       </p>
                       <p className={payload.end_date !== challenge.end_date ? "text-yellow-700 font-medium" : ""}>
                         <span className="text-muted-foreground">End Date:</span> {formatDate(payload.end_date)}
                       </p>
+                      <p className={payload.location_type !== (challenge as any).location_type ? "text-yellow-700 font-medium" : ""}>
+                        <span className="text-muted-foreground">Location:</span> {payload.location_type ?? "—"}
+                      </p>
+                      {payload.location_type === "onsite" && (
+                        <p className={payload.location_details !== (challenge as any).location_details ? "text-yellow-700 font-medium" : ""}>
+                          <span className="text-muted-foreground">Venue:</span> {payload.location_details ?? "—"}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -169,7 +199,7 @@ export default async function AdminChallengeDetailsPage({
                     </div>
                   )}
 
-                  {/* Milestone count change */}
+                  {/* Milestone count */}
                   {payload.milestones?.length !== undefined && (
                     <div className="text-sm text-muted-foreground border-t pt-3">
                       Milestones: <span className="font-medium">{payload.milestones.length}</span> proposed
@@ -231,7 +261,9 @@ export default async function AdminChallengeDetailsPage({
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>End Date:</span>
-                    <span className="font-medium">{formatDate(challenge.end_date)}</span>
+                    <span className="font-medium">
+                      {(challenge as any).is_perpetual ? "Open-ended (Perpetual)" : formatDate(challenge.end_date)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -247,8 +279,22 @@ export default async function AdminChallengeDetailsPage({
                     <span>Entry Fee:</span>
                     <span className="font-medium">
                       {challenge.entry_fee_amount && challenge.entry_fee_amount > 0
-                        ? `${challenge.currency} ${challenge.entry_fee_amount}`
+                        ? `${challenge.currency ?? "PHP"} ${challenge.entry_fee_amount}`
                         : "Free"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Industries:</span>
+                    <span className="font-medium">{currentIndustries}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Location:</span>
+                    <span className="font-medium">
+                      {(challenge as any).location_type === "onsite"
+                        ? `Onsite — ${(challenge as any).location_details ?? "TBA"}`
+                        : (challenge as any).location_type === "online"
+                        ? "Online"
+                        : "Not specified"}
                     </span>
                   </div>
                 </div>

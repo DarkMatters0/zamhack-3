@@ -1,30 +1,46 @@
-import { Users, Trophy, Building2, Timer, ArrowRight, CheckCircle2, Lock, Zap, CalendarDays } from "lucide-react"
+"use client"
+
 import Link from "next/link"
+import {
+  Building2,
+  Users,
+  Trophy,
+  CalendarDays,
+  Zap,
+  ArrowRight,
+  Lock,
+  CheckCircle2,
+  MapPin,
+  Globe,
+} from "lucide-react"
 import { Database } from "@/types/supabase"
 
-// ── Types (unchanged from original) ──────────────────────────────────────────
-type ChallengeWithOrg = Database["public"]["Tables"]["challenges"]["Row"] & {
-  organization: {
-    name: string
-  } | null
+type Challenge = Database["public"]["Tables"]["challenges"]["Row"] & {
+  organization: { name: string } | null
 }
 
 interface ChallengeCardProps {
-  challenge: ChallengeWithOrg
+  challenge: Challenge
+  /**
+   * When provided (perpetual + all milestones done), the card CTA becomes
+   * "View Results" and links to this href instead of the default challenge page.
+   */
+  perpetualResultsHref?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
 function getStatusLabel(status: string | null): string {
   switch (status) {
-    case "approved":
-    case "in_progress":       return "In Progress"
-    case "pending_approval":  return "Pending Approval"
-    case "under_review":      return "Under Review"
-    case "completed":         return "Completed"
-    case "closed":            return "Closed"
-    case "cancelled":         return "Cancelled"
-    case "draft":             return "Draft"
-    default:                  return status?.replace(/_/g, " ") ?? "Unknown"
+    case "approved":         return "Open"
+    case "in_progress":      return "In Progress"
+    case "under_review":     return "Under Review"
+    case "completed":
+    case "closed":           return "Closed"
+    case "cancelled":        return "Cancelled"
+    case "draft":            return "Draft"
+    case "pending_approval": return "Pending"
+    default:                 return status ?? "Unknown"
   }
 }
 
@@ -62,43 +78,85 @@ function formatCurrency(amount: number | null, currency: string | null): string 
 function formatDeadline(dateStr: string | null): { label: string; urgent: boolean } {
   if (!dateStr) return { label: "No deadline", urgent: false }
   const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
-  if (diff < 0)  return { label: "Ended",        urgent: false }
-  if (diff === 0) return { label: "Ends today",   urgent: true }
-  if (diff === 1) return { label: "1 day left",   urgent: true }
+  if (diff < 0)  return { label: "Ended",           urgent: false }
+  if (diff === 0) return { label: "Ends today",      urgent: true }
+  if (diff === 1) return { label: "1 day left",      urgent: true }
   if (diff <= 7)  return { label: `${diff} days left`, urgent: true }
   return {
-    label: new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    label: new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    }),
     urgent: false,
   }
 }
 
-// Deterministic accent stripe color per org name
 function orgAccentClass(name: string | undefined | null): string {
-  const palette = ["cc-accent-coral", "cc-accent-navy", "cc-accent-indigo", "cc-accent-emerald", "cc-accent-amber"]
-  const idx = (name ?? "").split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  const palette = [
+    "cc-accent-coral",
+    "cc-accent-navy",
+    "cc-accent-indigo",
+    "cc-accent-emerald",
+    "cc-accent-amber",
+  ]
+  const idx = (name ?? "")
+    .split("")
+    .reduce((a, c) => a + c.charCodeAt(0), 0)
   return palette[idx % palette.length]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ChallengeCard({ challenge }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, perpetualResultsHref }: ChallengeCardProps) {
   const isClosed    = challenge.status === "closed" || challenge.status === "completed"
   const isCancelled = challenge.status === "cancelled"
+  const isPerpetual = (challenge as any).is_perpetual === true
   const isInactive  = isClosed || isCancelled
+
+  // If perpetualResultsHref is passed the student completed this perpetual challenge
+  const isPerpetualCompleted = !!perpetualResultsHref
 
   const deadline    = formatDeadline(challenge.end_date)
   const accentClass = orgAccentClass(challenge.organization?.name)
 
-  return (
-    <article className={`cc-card${isInactive ? " cc-card-inactive" : ""}`}>
+  // Decide where the CTA links and what it says
+  const ctaHref = perpetualResultsHref ?? `/challenges/${challenge.id}`
 
-      {/* ── Coloured top stripe ────────────────────────────────────────── */}
+  const ctaContent = (() => {
+    if (isPerpetualCompleted) {
+      // Completed perpetual → looks identical to a normal closed challenge CTA
+      return {
+        label: <><CheckCircle2 size={14} /> View Results</>,
+        className: "cc-cta cc-cta-muted",
+      }
+    }
+    if (isClosed) {
+      return {
+        label: <><CheckCircle2 size={14} /> View Results</>,
+        className: "cc-cta cc-cta-muted",
+      }
+    }
+    if (isCancelled) {
+      return {
+        label: <><Lock size={14} /> Cancelled</>,
+        className: "cc-cta cc-cta-muted",
+      }
+    }
+    return {
+      label: <>View Details <ArrowRight size={14} /></>,
+      className: "cc-cta cc-cta-primary",
+    }
+  })()
+
+  return (
+    <article className={`cc-card${isInactive || isPerpetualCompleted ? " cc-card-inactive" : ""}`}>
+
+      {/* ── Coloured top stripe ── */}
       <div className={`cc-stripe ${accentClass}`} />
 
-      {/* ── Card header ───────────────────────────────────────────────── */}
+      {/* ── Card header ── */}
       <div className="cc-header">
         <div className="cc-header-top">
           <span className={`cc-status-badge ${getStatusClass(challenge.status)}`}>
-            {getStatusLabel(challenge.status)}
+            {isPerpetualCompleted ? "Completed" : getStatusLabel(challenge.status)}
           </span>
           {challenge.difficulty && (
             <span className={`cc-diff-badge ${getDiffClass(challenge.difficulty)}`}>
@@ -115,16 +173,20 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
         </div>
       </div>
 
-      {/* ── Description ───────────────────────────────────────────────── */}
+      {/* ── Description ── */}
       <div className="cc-body">
         <p className="cc-desc">{challenge.description}</p>
       </div>
 
-      {/* ── Meta strip ────────────────────────────────────────────────── */}
+      {/* ── Meta strip ── */}
       <div className="cc-meta">
         <div className="cc-meta-item">
           <Users size={13} />
-          <span>{challenge.max_participants ? `${challenge.max_participants} slots` : "Unlimited"}</span>
+          <span>
+            {challenge.max_participants
+              ? `${challenge.max_participants} slots`
+              : "Unlimited"}
+          </span>
         </div>
 
         <div className="cc-meta-item">
@@ -134,36 +196,38 @@ export function ChallengeCard({ challenge }: ChallengeCardProps) {
 
         <div className={`cc-meta-item cc-meta-deadline${deadline.urgent ? " cc-urgent" : ""}`}>
           <CalendarDays size={13} />
-          <span>{deadline.label}</span>
+          <span>{isPerpetual ? "No deadline" : deadline.label}</span>
         </div>
       </div>
 
-      {/* ── Participation type pill ────────────────────────────────────── */}
-      {challenge.participation_type && (
-        <div className="cc-pills">
+      {/* ── Participation type + location pills ── */}
+      <div className="cc-pills">
+        {challenge.participation_type && (
           <span className="cc-pill">
             <Zap size={10} strokeWidth={2.5} />
-            {challenge.participation_type.charAt(0).toUpperCase() + challenge.participation_type.slice(1)}
+            {challenge.participation_type.charAt(0).toUpperCase() +
+              challenge.participation_type.slice(1)}
           </span>
-        </div>
-      )}
-
-      {/* ── CTA footer ────────────────────────────────────────────────── */}
-      <div className="cc-footer">
-        <Link
-          href={`/challenges/${challenge.id}`}
-          className={`cc-cta ${isInactive ? "cc-cta-muted" : "cc-cta-primary"}`}
-        >
-          {isClosed ? (
-            <><CheckCircle2 size={14} /> View Results</>
-          ) : isCancelled ? (
-            <><Lock size={14} /> Cancelled</>
-          ) : (
-            <>View Details <ArrowRight size={14} /></>
-          )}
-        </Link>
+        )}
+        {(challenge as any).location_type === "onsite" ? (
+          <span className="cc-pill cc-pill-onsite">
+            <MapPin size={10} strokeWidth={2.5} />
+            Onsite
+          </span>
+        ) : (challenge as any).location_type === "online" ? (
+          <span className="cc-pill cc-pill-online">
+            <Globe size={10} strokeWidth={2.5} />
+            Online
+          </span>
+        ) : null}
       </div>
 
+      {/* ── CTA footer ── */}
+      <div className="cc-footer">
+        <Link href={ctaHref} className={ctaContent.className}>
+          {ctaContent.label}
+        </Link>
+      </div>
     </article>
   )
 }

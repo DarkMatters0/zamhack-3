@@ -44,7 +44,7 @@ async function getChallenges(searchParams: {
     query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`)
   }
 
-  // 2. Difficulty — cast to text for safe comparison against the enum
+  // 2. Difficulty
   if (searchParams.difficulty && searchParams.difficulty !== "all") {
     query = query.filter("difficulty::text", "eq", searchParams.difficulty)
   }
@@ -57,8 +57,6 @@ async function getChallenges(searchParams: {
   }
 
   // 4. Participation Type
-  // "solo"  → challenges that allow solo play (type = 'solo' OR 'both')
-  // "team"  → challenges that allow team play (type = 'team' OR 'both')
   if (searchParams.participation_type === "solo") {
     query = query.or("participation_type.eq.solo,participation_type.eq.both")
   } else if (searchParams.participation_type === "team") {
@@ -66,8 +64,6 @@ async function getChallenges(searchParams: {
   }
 
   // 5. Entry Type
-  // "free" → entry_fee_amount IS NULL or 0
-  // "paid" → entry_fee_amount > 0 (and not null)
   if (searchParams.entry_type === "free") {
     query = query.or("entry_fee_amount.is.null,entry_fee_amount.eq.0")
   } else if (searchParams.entry_type === "paid") {
@@ -97,8 +93,59 @@ async function getChallenges(searchParams: {
 }
 
 export default async function ChallengesPage({ searchParams }: ChallengesPageProps) {
+  const supabase = await createClient()
   const params = await searchParams
   const challenges = await getChallenges(params)
+
+  // --- Build perpetualCompletedSet ---
+  // Find which perpetual challenges the current user has fully submitted.
+  // Used to show "View Results" on the card instead of "View Details".
+  const perpetualCompletedSet = new Set<string>()
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user && challenges.length > 0) {
+    // 1. Get IDs of perpetual challenges in this result set (dedicated query)
+    const challengeIds = challenges.map((c) => c.id)
+    const { data: perpetualRows } = await supabase
+      .from("challenges")
+      .select("id")
+      .in("id", challengeIds)
+      .eq("is_perpetual", true)
+
+    const perpetualIds = (perpetualRows ?? []).map((r) => r.id)
+
+    if (perpetualIds.length > 0) {
+      // 2. Get participations for these perpetual challenges
+      const { data: participations } = await supabase
+        .from("challenge_participants")
+        .select("id, challenge_id")
+        .eq("user_id", user.id)
+        .in("challenge_id", perpetualIds)
+
+      for (const participation of participations ?? []) {
+        const challengeId = participation.challenge_id as string
+
+        // 3. Compare milestone count vs submission count
+        const { count: milestoneCount } = await supabase
+          .from("milestones")
+          .select("*", { count: "exact", head: true })
+          .eq("challenge_id", challengeId)
+
+        const { count: submissionCount } = await supabase
+          .from("submissions")
+          .select("*", { count: "exact", head: true })
+          .eq("participant_id", participation.id)
+
+        const total = milestoneCount ?? 0
+        const submitted = submissionCount ?? 0
+
+        if (total > 0 && submitted >= total) {
+          perpetualCompletedSet.add(challengeId)
+        }
+      }
+    }
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -119,7 +166,15 @@ export default async function ChallengesPage({ searchParams }: ChallengesPagePro
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {challenges.map((challenge) => (
-            <ChallengeCard key={challenge.id} challenge={challenge} />
+            <ChallengeCard
+              key={challenge.id}
+              challenge={challenge}
+              perpetualResultsHref={
+                perpetualCompletedSet.has(challenge.id)
+                  ? `/challenges/${challenge.id}`
+                  : undefined
+              }
+            />
           ))}
         </div>
       )}

@@ -19,15 +19,31 @@ interface MilestoneInput {
 interface CreateChallengeInput {
   title: string
   description: string
+
+  /** @deprecated use industries[] instead — kept for DB backward compat */
   industry: string
+  /** Multi-select industries array */
+  industries: string[]
+
   difficulty: ProficiencyLevel
   participationType: "solo" | "team" | "both"
   maxParticipants?: number
   maxTeams?: number
   maxTeamSize?: number
+
   startDate: string
-  endDate: string
+  /** Null when isPerpetual is true */
+  endDate: string | null
   registrationDeadline?: string
+
+  /** "online" | "onsite" */
+  locationType: "online" | "onsite"
+  /** Free-text onsite location, e.g. "Makati City" or "TBA". Null for online. */
+  locationDetails: string | null
+
+  /** If true, no end date is stored */
+  isPerpetual: boolean
+
   milestones: MilestoneInput[]
   skills: string[]
   organizationId: string
@@ -73,7 +89,6 @@ export const createChallenge = async (
     // Step 1: Create or get skill IDs
     const skillIds: string[] = []
     for (const skillName of input.skills) {
-      // Check if skill exists
       const { data: existingSkill } = await supabase
         .from("skills")
         .select("id")
@@ -83,7 +98,6 @@ export const createChallenge = async (
       if (existingSkill) {
         skillIds.push(existingSkill.id)
       } else {
-        // Create new skill
         const { data: newSkill, error: skillError } = await supabase
           .from("skills")
           .insert({ name: skillName })
@@ -92,7 +106,6 @@ export const createChallenge = async (
 
         if (skillError || !newSkill) {
           console.error("Error creating skill:", skillError)
-          // Continue with other skills even if one fails
         } else {
           skillIds.push(newSkill.id)
         }
@@ -103,20 +116,32 @@ export const createChallenge = async (
     const challengeData = {
       title: input.title,
       description: input.description,
-      industry: input.industry,
+
+      // Legacy single-industry field — store the first selected industry for backward compat
+      industry: input.industries[0] || input.industry || null,
+      // New multi-industry array
+      industries: input.industries,
+
       difficulty: input.difficulty,
       participation_type: input.participationType,
       max_participants: input.maxParticipants ?? null,
       max_teams: input.maxTeams ?? null,
       max_team_size: input.maxTeamSize ?? null,
       start_date: input.startDate,
-      end_date: input.endDate,
+      end_date: input.isPerpetual ? null : (input.endDate ?? null),
       registration_deadline: input.registrationDeadline ?? null,
       organization_id: input.organizationId,
       created_by: user.id,
       status: "draft" as ChallengeStatus,
       entry_fee_amount: input.entryFeeAmount ?? null,
       currency: input.currency ?? null,
+
+      // New location fields
+      location_type: input.locationType,
+      location_details: input.locationType === "onsite" ? (input.locationDetails || "TBA") : null,
+
+      // New perpetual field
+      is_perpetual: input.isPerpetual,
     }
 
     const { data: challenge, error: challengeError } = await supabase
@@ -151,7 +176,6 @@ export const createChallenge = async (
       .insert(milestonesData)
 
     if (milestonesError) {
-      // Rollback: delete the challenge if milestones fail
       await supabase.from("challenges").delete().eq("id", challengeId)
       return {
         success: false,
@@ -171,7 +195,6 @@ export const createChallenge = async (
         .insert(challengeSkillsData)
 
       if (skillsError) {
-        // Rollback: delete challenge and milestones
         await supabase.from("milestones").delete().eq("challenge_id", challengeId)
         await supabase.from("challenges").delete().eq("id", challengeId)
         return {
@@ -181,7 +204,6 @@ export const createChallenge = async (
       }
     }
 
-    // Revalidate relevant paths
     revalidatePath("/company/challenges")
     revalidatePath("/company/dashboard")
 
@@ -194,15 +216,3 @@ export const createChallenge = async (
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

@@ -7,9 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Database } from "@/types/supabase"
 
 type ChallengeWithOrg = Database["public"]["Tables"]["challenges"]["Row"] & {
-  organization: {
-    name: string
-  } | null
+  organization: { name: string } | null
 }
 
 const PAST_CHALLENGE_STATUSES = ["closed", "completed", "cancelled"]
@@ -17,47 +15,77 @@ const PAST_CHALLENGE_STATUSES = ["closed", "completed", "cancelled"]
 export default async function MyChallengesPage() {
   const supabase = await createClient()
 
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) {
-    redirect("/login")
-  }
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  if (userError || !user) redirect("/login")
 
-  // Step 1: Fetch participation records to get challenge IDs
-  const { data: participations, error: participationError } = await supabase
+  // 1. Fetch all participations
+  const { data: participations } = await supabase
     .from("challenge_participants")
     .select("id, status, challenge_id")
     .eq("user_id", user.id)
     .order("joined_at", { ascending: false })
-
-  if (participationError) {
-    console.error("Error fetching participations:", participationError)
-  }
 
   const allParticipations = participations || []
   const challengeIds = allParticipations
     .map((p) => p.challenge_id)
     .filter(Boolean) as string[]
 
-  // Step 2: Fetch challenges directly by ID (avoids RLS nested join issue)
+  // 2. Fetch challenges
   let challenges: ChallengeWithOrg[] = []
-
   if (challengeIds.length > 0) {
-    const { data: challengeData, error: challengeError } = await supabase
+    const { data: challengeData } = await supabase
       .from("challenges")
-      .select("*, organization:organizations(name)")
+      .select("*, is_perpetual, organization:organizations(name)")
       .in("id", challengeIds)
+    challenges = (challengeData as unknown as ChallengeWithOrg[]) || []
+  }
 
-    if (challengeError) {
-      console.error("Error fetching challenges:", challengeError)
-    } else {
-      challenges = (challengeData as unknown as ChallengeWithOrg[]) || []
+  // 2b. Separately fetch which of these challenges are perpetual.
+  //     This is a dedicated query so we never rely on TS types for is_perpetual.
+  const perpetualSet = new Set<string>()
+  if (challengeIds.length > 0) {
+    const { data: perpetualRows } = await supabase
+      .from("challenges")
+      .select("id")
+      .in("id", challengeIds)
+      .eq("is_perpetual", true)
+    for (const row of perpetualRows ?? []) {
+      perpetualSet.add(row.id)
     }
   }
 
-  // Step 3: Map challenges for quick lookup
-  const challengeMap = new Map(challenges.map((c) => [c.id, c]))
+  // 3. Build completionMap for ALL challenges (not just perpetual)
+  //    completionMap: challengeId → true if submitted >= total milestones > 0
+  const completionMap = new Map<string, boolean>()
 
-  // Step 4: Split into Active vs Past based on the CHALLENGE's status
+  for (const participation of allParticipations) {
+    const challengeId = participation.challenge_id as string
+
+    const { count: milestoneCount } = await supabase
+      .from("milestones")
+      .select("*", { count: "exact", head: true })
+      .eq("challenge_id", challengeId)
+
+    const { count: submissionCount } = await supabase
+      .from("submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("participant_id", participation.id)
+
+    const total = milestoneCount ?? 0
+    const submitted = submissionCount ?? 0
+    completionMap.set(challengeId, total > 0 && submitted >= total)
+  }
+
+  // Helper: uses the dedicated perpetualSet, no TypeScript type dependency
+  function isPerpetualChallenge(challenge: ChallengeWithOrg): boolean {
+    return perpetualSet.has(challenge.id)
+  }
+
+  // 4. Sort: perpetual + all milestones done → Past. Everything else follows status.
+  const challengeMap = new Map(challenges.map((c) => [c.id, c]))
   const activeChallenges: ChallengeWithOrg[] = []
   const pastChallenges: ChallengeWithOrg[] = []
 
@@ -65,7 +93,11 @@ export default async function MyChallengesPage() {
     const challenge = challengeMap.get(participation.challenge_id as string)
     if (!challenge) continue
 
-    if (PAST_CHALLENGE_STATUSES.includes(challenge.status as string)) {
+    const isPerpetual = isPerpetualChallenge(challenge)
+    const isCompleted = completionMap.get(challenge.id) ?? false
+    const isStatusPast = PAST_CHALLENGE_STATUSES.includes(challenge.status as string)
+
+    if (isStatusPast || (isPerpetual && isCompleted)) {
       pastChallenges.push(challenge)
     } else {
       activeChallenges.push(challenge)
@@ -98,21 +130,15 @@ export default async function MyChallengesPage() {
       ) : (
         <Tabs defaultValue="active" className="w-full">
           <TabsList>
-            <TabsTrigger value="active">
-              Active ({activeChallenges.length})
-            </TabsTrigger>
-            <TabsTrigger value="past">
-              Past ({pastChallenges.length})
-            </TabsTrigger>
+            <TabsTrigger value="active">Active ({activeChallenges.length})</TabsTrigger>
+            <TabsTrigger value="past">Past ({pastChallenges.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="mt-6">
             {activeChallenges.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card p-12 text-center text-muted-foreground">
                 <p className="text-lg font-medium">No active challenges</p>
-                <p className="text-sm mt-2">
-                  You don't have any active challenges at the moment.
-                </p>
+                <p className="text-sm mt-2">You don't have any active challenges at the moment.</p>
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -127,15 +153,26 @@ export default async function MyChallengesPage() {
             {pastChallenges.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-card p-12 text-center text-muted-foreground">
                 <p className="text-lg font-medium">No past challenges</p>
-                <p className="text-sm mt-2">
-                  Your completed challenges will appear here.
-                </p>
+                <p className="text-sm mt-2">Your completed challenges will appear here.</p>
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {pastChallenges.map((challenge) => (
-                  <ChallengeCard key={challenge.id} challenge={challenge} />
-                ))}
+                {pastChallenges.map((challenge) => {
+                  const isPerpetual = isPerpetualChallenge(challenge)
+                  const isCompleted = completionMap.get(challenge.id) ?? false
+                  return (
+                    <ChallengeCard
+                      key={challenge.id}
+                      challenge={challenge}
+                      // Perpetual + completed → card links to perpetual results page
+                      perpetualResultsHref={
+                        isPerpetual && isCompleted
+                          ? `/challenges/${challenge.id}`
+                          : undefined
+                      }
+                    />
+                  )
+                })}
               </div>
             )}
           </TabsContent>

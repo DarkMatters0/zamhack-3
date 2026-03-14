@@ -3,47 +3,51 @@
 import { createClient } from "@/utils/supabase/server"
 import { revalidatePath } from "next/cache"
 
-// --- EXISTING JOIN LOGIC ---
+// --- ACTION: JOIN CHALLENGE ---
 export async function joinChallenge(challengeId: string, teamId?: string, forceJoin: boolean = false) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "You must be logged in to join a challenge." }
-  }
+  if (!user) return { error: "You must be logged in to join a challenge." }
 
-  const { data: targetChallenge, error: fetchError } = await supabase
+  const { data: targetChallenge, error: fetchError } = await (supabase
     .from("challenges")
-    .select("title, start_date, end_date, status, registration_deadline")
+    .select("title, start_date, end_date, status, registration_deadline, is_perpetual")
     .eq("id", challengeId)
-    .single()
+    .single() as any)
 
-  if (fetchError || !targetChallenge) {
-    return { error: "Challenge not found." }
+  if (fetchError || !targetChallenge) return { error: "Challenge not found." }
+
+  const isPerpetual: boolean = targetChallenge.is_perpetual === true
+
+  if (!targetChallenge.start_date) {
+    return { error: "This challenge has missing date information and cannot be joined." }
   }
 
-  if (!targetChallenge.start_date || !targetChallenge.end_date || !targetChallenge.registration_deadline) {
+  if (!isPerpetual && !targetChallenge.end_date) {
     return { error: "This challenge has missing date information and cannot be joined." }
   }
 
   const now = new Date()
   const startDate = new Date(targetChallenge.start_date)
-  const endDate = new Date(targetChallenge.end_date)
-  const regDeadline = new Date(targetChallenge.registration_deadline)
+  const endDate = targetChallenge.end_date ? new Date(targetChallenge.end_date) : null
+  const regDeadline = targetChallenge.registration_deadline
+    ? new Date(targetChallenge.registration_deadline)
+    : null
 
-  if (targetChallenge.status !== 'approved' && targetChallenge.status !== 'in_progress') {
+  if (targetChallenge.status !== "approved" && targetChallenge.status !== "in_progress") {
     return { error: "This challenge is not open for registration." }
   }
 
-  const oneDay = 24 * 60 * 60 * 1000
-  const isEndingSoon = (endDate.getTime() - now.getTime()) < oneDay
-
-  if (now > regDeadline) {
+  if (regDeadline && now > regDeadline) {
     return { error: "Registration deadline has passed." }
   }
 
-  if (isEndingSoon) {
-    return { error: "Registration closed: This challenge ends in less than 24 hours." }
+  if (!isPerpetual && endDate) {
+    const oneDay = 24 * 60 * 60 * 1000
+    if (endDate.getTime() - now.getTime() < oneDay) {
+      return { error: "Registration closed: This challenge ends in less than 24 hours." }
+    }
   }
 
   const { data: existing } = await supabase
@@ -53,40 +57,38 @@ export async function joinChallenge(challengeId: string, teamId?: string, forceJ
     .eq("challenge_id", challengeId)
     .single()
 
-  if (existing) {
-    return { error: "You are already joined in this challenge." }
-  }
+  if (existing) return { error: "You are already joined in this challenge." }
 
   if (!forceJoin) {
-    const { data: activeParticipations } = await supabase
+    const { data: activeParticipations } = await (supabase
       .from("challenge_participants")
       .select(`
         challenge:challenges (
           id,
           title,
           start_date,
-          end_date
+          end_date,
+          is_perpetual
         )
       `)
       .eq("user_id", user.id)
-      .eq("status", "active") 
+      .eq("status", "active") as any)
 
     if (activeParticipations && activeParticipations.length > 0) {
       const overlappingChallenge = activeParticipations.find((p: any) => {
-        if (!p.challenge) return false
-        if (!p.challenge.start_date || !p.challenge.end_date) return false
-        
+        if (!p.challenge || !p.challenge.start_date) return false
+        const currentEnd = p.challenge.end_date ? new Date(p.challenge.end_date) : null
+        const newEnd = endDate
+        if (!currentEnd || !newEnd) return startDate >= new Date(p.challenge.start_date)
         const currentStart = new Date(p.challenge.start_date)
-        const currentEnd = new Date(p.challenge.end_date)
-
-        return (startDate <= currentEnd) && (endDate >= currentStart)
+        return startDate <= currentEnd && newEnd >= currentStart
       })
 
       if (overlappingChallenge) {
-        return { 
-          status: "overlap_warning", 
-          message: `This overlaps with "${(overlappingChallenge.challenge as any).title}". Do you still want to join?`,
-          conflictingId: (overlappingChallenge.challenge as any).id
+        return {
+          status: "overlap_warning",
+          message: `This overlaps with "${overlappingChallenge.challenge.title}". Do you still want to join?`,
+          conflictingId: overlappingChallenge.challenge.id,
         }
       }
     }
@@ -98,8 +100,8 @@ export async function joinChallenge(challengeId: string, teamId?: string, forceJ
       challenge_id: challengeId,
       user_id: user.id,
       team_id: teamId || null,
-      status: 'active',
-      joined_at: new Date().toISOString()
+      status: "active",
+      joined_at: new Date().toISOString(),
     })
 
   if (joinError) {
@@ -115,7 +117,7 @@ export async function joinChallenge(challengeId: string, teamId?: string, forceJ
 // --- ACTION: SUBMIT FOR APPROVAL ---
 export async function submitChallengeForApproval(challengeId: string) {
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Unauthorized" }
 
@@ -132,19 +134,19 @@ export async function submitChallengeForApproval(challengeId: string) {
     .update({ status: "pending_approval" as any })
     .eq("id", challengeId)
 
-  if (error) {
-    return { error: "Failed to submit challenge" }
-  }
+  if (error) return { error: "Failed to submit challenge" }
 
   revalidatePath(`/company/challenges/${challengeId}`)
   return { success: true }
 }
 
-// --- ACTION: CLOSE CHALLENGE & PICK WINNERS ---
+// --- ACTION: CLOSE CHALLENGE ---
+// Perpetual challenges: just sets status to "closed" — no winners calculated.
+// Normal challenges: calculates top 3 winners from scores, then closes.
 export async function closeChallenge(challengeId: string): Promise<{ success: boolean; error: string | null }> {
   const supabase = await createClient()
-  
-  // 1. Auth & Ownership Check
+
+  // 1. Auth & Ownership
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { success: false, error: "Unauthorized" }
 
@@ -154,22 +156,39 @@ export async function closeChallenge(challengeId: string): Promise<{ success: bo
     .eq("id", user.id)
     .single()
 
-  if (!profile || (profile.role !== 'company_admin' && profile.role !== 'company_member')) {
+  if (!profile || (profile.role !== "company_admin" && profile.role !== "company_member")) {
     return { success: false, error: "Only company admins can close challenges." }
   }
 
-  // 2. Fetch Challenge to verify Org
-  const { data: challenge } = await supabase
+  // 2. Fetch challenge — verify org ownership and check perpetual flag
+  const { data: challenge } = await (supabase
     .from("challenges")
-    .select("organization_id")
+    .select("organization_id, is_perpetual")
     .eq("id", challengeId)
-    .single()
+    .single() as any)
 
   if (!challenge || challenge.organization_id !== profile.organization_id) {
     return { success: false, error: "Unauthorized access to this challenge." }
   }
 
-  // 3. Fetch All Participants with Submissions & Evaluations
+  const isPerpetual: boolean = challenge.is_perpetual === true
+
+  // 3. Perpetual — just close, skip winner calculation
+  if (isPerpetual) {
+    const { error: updateError } = await supabase
+      .from("challenges")
+      .update({ status: "closed" as any })
+      .eq("id", challengeId)
+
+    if (updateError) return { success: false, error: "Failed to close challenge." }
+
+    revalidatePath(`/challenges/${challengeId}`)
+    revalidatePath(`/company/challenges/${challengeId}`)
+    revalidatePath(`/challenges`)
+    return { success: true, error: null }
+  }
+
+  // 4. Normal — calculate leaderboard and save top 3 winners
   const { data: participants } = await supabase
     .from("challenge_participants")
     .select(`
@@ -185,35 +204,25 @@ export async function closeChallenge(challengeId: string): Promise<{ success: bo
 
   if (!participants) return { success: false, error: "No participants found." }
 
-  // 4. Calculate Leaderboard
   const leaderboard = participants.map((p: any) => {
     const totalScore = p.submissions.reduce((acc: number, sub: any) => {
-      const evalScore = sub.evaluations?.[0]?.score || 0
-      return acc + evalScore
+      return acc + (sub.evaluations?.[0]?.score || 0)
     }, 0)
-    
-    return {
-      participant_id: p.id,
-      profile_id: p.user_id,
-      score: totalScore
-    }
+    return { profile_id: p.user_id, score: totalScore }
   })
 
   leaderboard.sort((a, b) => b.score - a.score)
 
-  // 5. Pick Top 3 Winners — FIX: include `score` so it's persisted to the winners table
   const winners = leaderboard.slice(0, 3).map((entry, index) => ({
     challenge_id: challengeId,
     profile_id: entry.profile_id!,
-    score: entry.score, // <-- persists the computed score so the results page can display it
+    score: entry.score,
     rank: index + 1,
-    prize: index === 0 ? "1st Place Prize" : index === 1 ? "2nd Place Prize" : "3rd Place Prize" 
+    prize: index === 0 ? "1st Place Prize" : index === 1 ? "2nd Place Prize" : "3rd Place Prize",
   }))
 
-  // 6. Save Winners to DB
   if (winners.length > 0) {
     await supabase.from("winners").delete().eq("challenge_id", challengeId)
-    
     const { error: winnerError } = await supabase.from("winners").insert(winners)
     if (winnerError) {
       console.error("Winner save error:", winnerError)
@@ -221,7 +230,6 @@ export async function closeChallenge(challengeId: string): Promise<{ success: bo
     }
   }
 
-  // 7. Update Challenge Status to "closed"
   const { error: updateError } = await supabase
     .from("challenges")
     .update({ status: "closed" as any })
@@ -229,25 +237,21 @@ export async function closeChallenge(challengeId: string): Promise<{ success: bo
 
   if (updateError) return { success: false, error: "Failed to close challenge." }
 
-  // 8. Revalidate Paths
   revalidatePath(`/challenges/${challengeId}`)
   revalidatePath(`/company/challenges/${challengeId}`)
   revalidatePath(`/dashboard`)
   revalidatePath(`/challenges`)
   revalidatePath(`/challenges/${challengeId}/results`)
 
-  // 9. Return success
   return { success: true, error: null }
 }
 
 // --- ACTION: RECALCULATE WINNERS ---
-// Fixes challenges that were closed before evaluations were saved.
-// Re-runs the same leaderboard logic as closeChallenge but does NOT
-// change the challenge status — safe to call on an already-closed challenge.
+// Perpetual challenges have no winners — this is blocked for them.
 export async function recalculateWinners(challengeId: string): Promise<{ success: boolean; error: string | null }> {
   const supabase = await createClient()
 
-  // 1. Auth & Ownership Check
+  // 1. Auth & Ownership
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { success: false, error: "Unauthorized" }
 
@@ -257,26 +261,31 @@ export async function recalculateWinners(challengeId: string): Promise<{ success
     .eq("id", user.id)
     .single()
 
-  if (!profile || (profile.role !== 'company_admin' && profile.role !== 'company_member')) {
+  if (!profile || (profile.role !== "company_admin" && profile.role !== "company_member")) {
     return { success: false, error: "Only company admins can recalculate winners." }
   }
 
-  // 2. Fetch Challenge to verify Org & confirm it is closed
-  const { data: challenge } = await supabase
+  // 2. Fetch challenge — verify org, status, and perpetual flag
+  const { data: challenge } = await (supabase
     .from("challenges")
-    .select("organization_id, status")
+    .select("organization_id, status, is_perpetual")
     .eq("id", challengeId)
-    .single()
+    .single() as any)
 
   if (!challenge || challenge.organization_id !== profile.organization_id) {
     return { success: false, error: "Unauthorized access to this challenge." }
+  }
+
+  // Perpetual challenges have no winners
+  if (challenge.is_perpetual === true) {
+    return { success: false, error: "Perpetual challenges do not have winners." }
   }
 
   if (challenge.status !== "closed" && challenge.status !== "completed") {
     return { success: false, error: "Can only recalculate winners for closed challenges." }
   }
 
-  // 3. Fetch All Participants with Submissions & Evaluations
+  // 3. Fetch participants
   const { data: participants } = await supabase
     .from("challenge_participants")
     .select(`
@@ -294,44 +303,31 @@ export async function recalculateWinners(challengeId: string): Promise<{ success
     return { success: false, error: "No participants found for this challenge." }
   }
 
-  // 4. Calculate Leaderboard — sum all evaluation scores per participant
+  // 4. Recalculate leaderboard
   const leaderboard = participants.map((p: any) => {
     const totalScore = p.submissions.reduce((acc: number, sub: any) => {
-      const evalScore = sub.evaluations?.[0]?.score || 0
-      return acc + evalScore
+      return acc + (sub.evaluations?.[0]?.score || 0)
     }, 0)
-
-    return {
-      participant_id: p.id,
-      profile_id: p.user_id,
-      score: totalScore,
-    }
+    return { profile_id: p.user_id, score: totalScore }
   })
 
   leaderboard.sort((a, b) => b.score - a.score)
 
-  // 5. Pick Top 3 Winners with score persisted
   const winners = leaderboard.slice(0, 3).map((entry, index) => ({
     challenge_id: challengeId,
     profile_id: entry.profile_id!,
     score: entry.score,
     rank: index + 1,
-    prize:
-      index === 0 ? "1st Place Prize" :
-      index === 1 ? "2nd Place Prize" :
-                   "3rd Place Prize",
+    prize: index === 0 ? "1st Place Prize" : index === 1 ? "2nd Place Prize" : "3rd Place Prize",
   }))
 
-  // 6. Replace existing winners in DB
   await supabase.from("winners").delete().eq("challenge_id", challengeId)
-
   const { error: winnerError } = await supabase.from("winners").insert(winners)
   if (winnerError) {
     console.error("Recalculate winner save error:", winnerError)
     return { success: false, error: "Failed to save recalculated winners." }
   }
 
-  // 7. Revalidate so results page reflects new data immediately
   revalidatePath(`/challenges/${challengeId}`)
   revalidatePath(`/challenges/${challengeId}/results`)
   revalidatePath(`/company/challenges/${challengeId}`)

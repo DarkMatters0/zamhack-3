@@ -20,7 +20,7 @@ export type UpdateChallengeInput = {
   title: string;
   description: string;
   problem_brief: string;
-  industry: string;
+  industries: string[];
   difficulty: Enums<"proficiency_level">;
   status: Enums<"challenge_status">;
   participation_type: "solo" | "team" | "both";
@@ -32,6 +32,9 @@ export type UpdateChallengeInput = {
   registration_deadline: string;
   entry_fee_amount: number;
   currency: string;
+  is_perpetual: boolean;
+  location_type: "online" | "onsite" | null;
+  location_details: string | null;
   milestones: MilestoneInput[];
 };
 
@@ -55,7 +58,6 @@ export async function updateChallenge(
   } = await supabase.auth.getUser();
   if (authError || !user) throw new Error("Unauthorized");
 
-  // Fetch current challenge to determine the edit path
   const { data: existing, error: fetchError } = await supabase
     .from("challenges")
     .select("status, created_by")
@@ -68,27 +70,31 @@ export async function updateChallenge(
   const isDirect = DIRECT_EDIT_STATUSES.includes(existing.status ?? "");
 
   if (isDirect) {
-    // ── Draft / Pending Approval: apply edits immediately ─────────────────
+    // Draft / Pending Approval → apply directly
     const { error: challengeError } = await supabase
       .from("challenges")
       .update({
         title: data.title,
         description: data.description,
         problem_brief: data.problem_brief,
-        industry: data.industry,
+        industry: data.industries?.[0] ?? null,
+        industries: data.industries,
         difficulty: data.difficulty,
         status: data.status,
         participation_type: data.participation_type,
         max_participants: data.max_participants,
         max_teams: data.max_teams,
         max_team_size: data.max_team_size,
-        start_date: data.start_date || null,
-        end_date: data.end_date || null,
-        registration_deadline: data.registration_deadline || null,
+        start_date: data.is_perpetual ? null : (data.start_date || null),
+        end_date: data.is_perpetual ? null : (data.end_date || null),
+        registration_deadline: data.is_perpetual ? null : (data.registration_deadline || null),
         entry_fee_amount: data.entry_fee_amount,
         currency: data.currency,
+        is_perpetual: data.is_perpetual,
+        location_type: data.location_type,
+        location_details: data.location_type === "onsite" ? data.location_details : null,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", challengeId)
       .eq("created_by", user.id);
 
@@ -126,15 +132,15 @@ export async function updateChallenge(
     return { type: "updated", redirectTo: `/company/challenges/${challengeId}` };
 
   } else {
-    // ── Live challenge: stage for admin review, don't touch the live data ──
-const { error: insertError } = await supabase
-  .from("challenge_pending_edits")
-  .insert({
-    challenge_id: challengeId,
-    submitted_by: user.id,
-    payload: JSON.parse(JSON.stringify(data)),
-    status: "pending",
-  });
+    // Live challenge → stage for admin review
+    const { error: insertError } = await supabase
+      .from("challenge_pending_edits")
+      .insert({
+        challenge_id: challengeId,
+        submitted_by: user.id,
+        payload: JSON.parse(JSON.stringify(data)),
+        status: "pending",
+      });
 
     if (insertError) throw new Error(insertError.message);
 
