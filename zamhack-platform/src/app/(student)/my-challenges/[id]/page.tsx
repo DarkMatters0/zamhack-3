@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { SubmissionForm } from "@/components/submission-form"
+import { RubricCriteriaCard } from "@/components/rubric-criteria-card"
 import { AlertCircle, CheckCircle2, Lock, MessageSquare } from "lucide-react"
 import Link from "next/link"
 
@@ -14,6 +15,7 @@ type Organization = Database["public"]["Tables"]["organizations"]["Row"]
 type Milestone = Database["public"]["Tables"]["milestones"]["Row"]
 type Submission = Database["public"]["Tables"]["submissions"]["Row"]
 type Evaluation = Database["public"]["Tables"]["evaluations"]["Row"]
+type Rubric = Database["public"]["Tables"]["rubrics"]["Row"]
 type ChallengeParticipant = Database["public"]["Tables"]["challenge_participants"]["Row"]
 
 interface ChallengeProgressData {
@@ -21,9 +23,10 @@ interface ChallengeProgressData {
     organization: Organization | null
   }
   milestones: Milestone[]
-  participant: ChallengeParticipant // Non-nullable
+  participant: ChallengeParticipant
   submissions: Submission[]
   evaluations: Evaluation[]
+  rubrics: Rubric[]
 }
 
 type MilestoneStatus = "completed" | "in_progress" | "locked"
@@ -114,12 +117,24 @@ async function getChallengeProgress(
     }
   }
 
+  // Fetch rubrics for the challenge
+  const { data: rubrics, error: rubricsError } = await supabase
+    .from("rubrics")
+    .select("*")
+    .eq("challenge_id", challengeId)
+    .order("created_at", { ascending: true })
+
+  if (rubricsError) {
+    console.error("Error fetching rubrics:", rubricsError)
+  }
+
   return {
     challenge: challenge as any,
     milestones: milestones || [],
-    participant: participant as ChallengeParticipant, // Cast to non-null
+    participant: participant as ChallengeParticipant,
     submissions: submissions || [],
     evaluations: evaluations || [],
+    rubrics: rubrics || [],
   }
 }
 
@@ -152,7 +167,7 @@ export default async function ChallengeProgressPage({
         </div>
         <h2 className="text-2xl font-bold tracking-tight">Challenge not found</h2>
         <p className="text-muted-foreground max-w-[500px]">
-          The challenge you are looking for doesn't exist or you are not a participant.
+          The challenge you are looking for doesn&apos;t exist or you are not a participant.
         </p>
         <Button asChild variant="outline">
           <Link href="/my-challenges">Back to My Challenges</Link>
@@ -161,7 +176,7 @@ export default async function ChallengeProgressPage({
     )
   }
 
-  const { challenge, milestones, participant, submissions, evaluations } = data
+  const { challenge, milestones, participant, submissions, evaluations, rubrics } = data
 
   // Create a map of milestone_id -> submission
   const submissionMap = new Map<string, Submission>()
@@ -173,7 +188,6 @@ export default async function ChallengeProgressPage({
 
   // Create a map of submission_id -> evaluation
   const evaluationMap = new Map<string, Evaluation>()
-  // FIX: Using 'evaluationItem' instead of 'eval' to fix the Reserved Keyword Error
   evaluations.forEach((evaluationItem) => {
     if (evaluationItem.submission_id) {
       evaluationMap.set(evaluationItem.submission_id, evaluationItem)
@@ -193,14 +207,11 @@ export default async function ChallengeProgressPage({
     let status: MilestoneStatus = "locked"
 
     if (submission) {
-      // Has submission - consider it completed (even if no evaluation yet)
       status = "completed"
     } else if (!foundInProgress) {
-      // First milestone without submission is "in progress"
       status = "in_progress"
       foundInProgress = true
     }
-    // Otherwise remains "locked"
 
     milestonesWithStatus.push({
       ...milestone,
@@ -267,6 +278,9 @@ export default async function ChallengeProgressPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Scoring Criteria — visible to students at all times */}
+      <RubricCriteriaCard rubrics={rubrics} />
 
       {/* Milestones Feed */}
       <div className="space-y-4">
