@@ -229,7 +229,7 @@ export async function autoEvaluateSubmission(
     scoresToInsert = rubrics.map((r) => {
       const llmScore = llmByRubricId.get(r.id)
       const rawPoints = llmScore?.points_awarded ?? 0
-      const clamped = Math.max(0, Math.min(r.max_points, Math.round(rawPoints)))
+      const clamped = Math.max(0, Math.min(r.max_points ?? 0, Math.round(rawPoints)))
       return {
         submission_id: submissionId,
         rubric_id: r.id,
