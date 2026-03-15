@@ -11,7 +11,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { Search, Filter, X } from "lucide-react"
+
+// Matches the full industry list used across the platform (company create + admin settings)
+const INDUSTRIES = [
+  "Technology",
+  "Finance",
+  "Healthcare",
+  "Education",
+  "E-commerce",
+  "Design",
+  "Marketing",
+  "Agriculture",
+  "Manufacturing",
+  "Social Impact",
+  "Other",
+]
 
 export function ChallengeFilters() {
   const searchParams = useSearchParams()
@@ -19,21 +36,27 @@ export function ChallengeFilters() {
   const { replace } = useRouter()
 
   const [query, setQuery] = useState(searchParams.get("q") || "")
-  const [category, setCategory] = useState(searchParams.get("category") || "all")
   const [sort, setSort] = useState(searchParams.get("sort") || "newest")
   const [difficulty, setDifficulty] = useState(searchParams.get("difficulty") || "all")
   const [participationType, setParticipationType] = useState(searchParams.get("participation_type") || "all")
   const [entryType, setEntryType] = useState(searchParams.get("entry_type") || "all")
 
+  // ── Multi-select industry state ──────────────────────────────────
+  // URL param is comma-separated: ?category=Technology,Finance
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>(() => {
+    const raw = searchParams.get("category")
+    return raw ? raw.split(",").filter(Boolean) : []
+  })
+
   const hasActiveFilters =
     !!query ||
-    category !== "all" ||
+    selectedIndustries.length > 0 ||
     sort !== "newest" ||
     difficulty !== "all" ||
     participationType !== "all" ||
     entryType !== "all"
 
-  // Debounced search
+  // ── Debounced search ─────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
       const params = new URLSearchParams(searchParams.toString())
@@ -47,6 +70,7 @@ export function ChallengeFilters() {
     return () => clearTimeout(timer)
   }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Generic single-value filter ──────────────────────────────────
   const handleFilterChange = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     if (value && value !== "all") {
@@ -57,9 +81,27 @@ export function ChallengeFilters() {
     replace(`${pathname}?${params.toString()}`)
   }
 
+  // ── Industry checkbox toggle ─────────────────────────────────────
+  const toggleIndustry = (industry: string) => {
+    const next = selectedIndustries.includes(industry)
+      ? selectedIndustries.filter((i) => i !== industry)
+      : [...selectedIndustries, industry]
+
+    setSelectedIndustries(next)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.length > 0) {
+      params.set("category", next.join(","))
+    } else {
+      params.delete("category")
+    }
+    replace(`${pathname}?${params.toString()}`)
+  }
+
+  // ── Clear all ────────────────────────────────────────────────────
   const handleClear = () => {
     setQuery("")
-    setCategory("all")
+    setSelectedIndustries([])
     setSort("newest")
     setDifficulty("all")
     setParticipationType("all")
@@ -87,9 +129,9 @@ export function ChallengeFilters() {
         )}
       </div>
 
-      {/* Row 1: Search + Category + Sort */}
+      {/* Row 1: Search + Sort */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="relative">
+        <div className="relative md:col-span-2">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by title or description..."
@@ -98,25 +140,6 @@ export function ChallengeFilters() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-
-        <Select
-          value={category}
-          onValueChange={(val) => {
-            setCategory(val)
-            handleFilterChange("category", val)
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="Technology">Technology & Coding</SelectItem>
-            <SelectItem value="Design">Design & Creative</SelectItem>
-            <SelectItem value="Business">Business & Marketing</SelectItem>
-            <SelectItem value="Social Impact">Social Impact</SelectItem>
-          </SelectContent>
-        </Select>
 
         <Select
           value={sort}
@@ -189,6 +212,47 @@ export function ChallengeFilters() {
             <SelectItem value="paid">💳 Paid Entry</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Row 3: Industry multi-checkbox ─────────────────────────── */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-foreground">
+          Industry{" "}
+          <span className="text-xs font-normal text-muted-foreground">
+            (select all that apply)
+          </span>
+          {selectedIndustries.length > 0 && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              {selectedIndustries.length} selected
+            </span>
+          )}
+        </p>
+
+
+        <div className="rounded-md border p-3">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+            {INDUSTRIES.map((industry) => {
+              const id = `industry-${industry}`
+              const checked = selectedIndustries.includes(industry)
+              return (
+                <div key={industry} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={id}
+                    checked={checked}
+                    onCheckedChange={() => toggleIndustry(industry)}
+                    aria-label={industry}
+                  />
+                  <Label
+                    htmlFor={id}
+                    className="cursor-pointer text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {industry}
+                  </Label>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </div>
   )
