@@ -266,3 +266,86 @@ export async function rejectPendingEdit(pendingEditId: string, adminNote?: strin
   revalidatePath(`/admin/challenges/${pendingEdit.challenge_id}`)
   revalidatePath(`/company/challenges/${pendingEdit.challenge_id}`)
 }
+
+// ==========================================
+// EVALUATOR ASSIGNMENT ACTIONS
+// ==========================================
+
+export async function assignEvaluator(
+  challengeId: string,
+  evaluatorId: string,
+  reviewDeadline: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Unauthorized" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.role !== "admin") return { success: false, error: "Unauthorized" }
+
+  // Verify the evaluator exists and has the evaluator role
+  const { data: evaluatorProfile } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", evaluatorId)
+    .single()
+
+  if (!evaluatorProfile || evaluatorProfile.role !== "evaluator") {
+    return { success: false, error: "User is not an evaluator" }
+  }
+
+  // Upsert — if already assigned, update the deadline
+  const { error } = await supabase
+    .from("challenge_evaluators")
+    .upsert(
+      {
+        challenge_id: challengeId,
+        evaluator_id: evaluatorId,
+        assigned_at: new Date().toISOString(),
+        review_deadline: reviewDeadline || null,
+      },
+      { onConflict: "challenge_id,evaluator_id" }
+    )
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath(`/admin/challenges/${challengeId}`)
+  revalidatePath(`/evaluator/assignments`)
+  return { success: true }
+}
+
+export async function removeEvaluator(
+  challengeId: string,
+  evaluatorId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Unauthorized" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.role !== "admin") return { success: false, error: "Unauthorized" }
+
+  const { error } = await supabase
+    .from("challenge_evaluators")
+    .delete()
+    .eq("challenge_id", challengeId)
+    .eq("evaluator_id", evaluatorId)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath(`/admin/challenges/${challengeId}`)
+  revalidatePath(`/evaluator/assignments`)
+  return { success: true }
+}
