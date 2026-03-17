@@ -3,10 +3,9 @@
 import { useState, useRef, useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
-import { Send, MessageCircle, Building2, ArrowLeft } from "lucide-react"
+import { Send, MessageCircle, ArrowLeft } from "lucide-react"
 import { sendDirectMessage, markConversationAsRead } from "@/app/actions/message-actions"
 
-// Module-level set — survives re-renders and page navigations within the session
 const sessionReadIds = new Set<string>()
 
 interface Profile {
@@ -61,26 +60,22 @@ export function MessagesClient({
   activeOtherProfile,
   currentUserId,
 }: MessagesClientProps) {
-  const [messages, setMessages] = useState<Message[]>(activeMessages)
-  const [text, setText] = useState("")
-  const [sending, setSending] = useState(false)
+  const [messages, setMessages]     = useState<Message[]>(activeMessages)
+  const [text, setText]             = useState("")
+  const [sending, setSending]       = useState(false)
   const [mobileView, setMobileView] = useState<"list" | "chat">(
     activeConversationId ? "chat" : "list"
   )
 
-  // Track which conversations we've already marked as read this session
   const markedReadRef = useRef<Set<string>>(new Set())
+  const scrollRef     = useRef<HTMLDivElement>(null)
 
-  // Local unread map — zero out any conversation already read this session
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>(
     () => Object.fromEntries(
       conversations.map((c) => [c.id, sessionReadIds.has(c.id) ? 0 : c.unreadCount])
     )
   )
 
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  // When server refreshes conversations prop, update unreadMap — respect both local ref and session set
   useEffect(() => {
     setUnreadMap((prev) => {
       const next = { ...prev }
@@ -95,27 +90,18 @@ export function MessagesClient({
     })
   }, [conversations])
 
-  useEffect(() => {
-    setMessages(activeMessages)
-  }, [activeMessages])
+  useEffect(() => { setMessages(activeMessages) }, [activeMessages])
 
-  // When active conversation loads: clear badge locally + mark as read in DB + refresh sidebar
   useEffect(() => {
     if (!activeConversationId) return
     if (markedReadRef.current.has(activeConversationId)) return
-
-    // 1. Track in both ref (render-cycle) and module-level set (across navigations)
     markedReadRef.current.add(activeConversationId)
     sessionReadIds.add(activeConversationId)
-
-    // 2. Clear locally immediately
     setUnreadMap((prev) => ({ ...prev, [activeConversationId]: 0 }))
-
-    // 3. Mark as read in DB, then fire event so UnreadMessagesBadge re-fetches
     markConversationAsRead(activeConversationId).then(() => {
-      window.dispatchEvent(new Event('messages-read'))
+      window.dispatchEvent(new Event("messages-read"))
     })
-  }, [activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeConversationId])
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -156,130 +142,133 @@ export function MessagesClient({
     if (!dateStr) return ""
     const d = new Date(dateStr)
     const now = new Date()
-    const isToday = d.toDateString() === now.toDateString()
-    return isToday
+    return d.toDateString() === now.toDateString()
       ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : d.toLocaleDateString([], { month: "short", day: "numeric" })
   }
 
-  const getInitials = (p: Profile | null) => {
-    if (!p) return "?"
-    return `${p.first_name?.[0] ?? ""}${p.last_name?.[0] ?? ""}`.toUpperCase() || "?"
-  }
+  const getInitials = (p: Profile | null) =>
+    `${p?.first_name?.[0] ?? ""}${p?.last_name?.[0] ?? ""}`.toUpperCase() || "?"
+  const getName = (p: Profile | null) =>
+    [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Unknown"
+  const getCompany = (p: Profile | null) =>
+    (p as any)?.organizations?.name ?? null
 
-  const getName = (p: Profile | null) => {
-    if (!p) return "Unknown"
-    return [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unknown"
-  }
-
-  const getCompany = (p: Profile | null) => {
-    return (p as any)?.organizations?.name ?? null
-  }
+  // ── Height fills the available space below the portal header.
+  //    Mobile: header=64px, padding=p-4 (16px top+bottom = 32px) → 96px = 6rem
+  //    md+:    header=64px, padding=p-6 (24px top+bottom = 48px) → but p-6 is 1.5rem each side
+  //    We use dvh so iOS browser chrome doesn't cause overflow.
+  const containerCls =
+    "flex h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-8.5rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 128px)", gap: 0, background: "#fff", borderRadius: 20, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+    <div className={containerCls}>
 
-      {/* ── Conversation List ── */}
+      {/* ── Conversation List ─────────────────────────────────────────
+           Mobile:  full width, hidden when chat is open
+           Desktop: fixed 300px sidebar always visible               */}
       <div
-        style={{ width: 300, borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", flexShrink: 0 }}
-        className={mobileView === "chat" ? "hidden md:flex" : "flex"}
+        className={`
+          flex flex-col border-r border-gray-100 bg-white
+          w-full md:w-[300px] md:flex-shrink-0
+          ${mobileView === "chat" ? "hidden md:flex" : "flex"}
+        `}
       >
-        <div style={{ padding: "1.25rem 1.25rem 1rem", borderBottom: "1px solid #f3f4f6" }}>
-          <h1 style={{ fontFamily: "var(--font-outfit, Outfit, sans-serif)", fontSize: "1.25rem", fontWeight: 700, color: "#2c3e50", margin: 0 }}>Messages</h1>
-          <p style={{ fontSize: "0.775rem", color: "#9ca3af", marginTop: 2 }}>
+        {/* List header */}
+        <div className="flex-shrink-0 border-b border-gray-100 px-4 py-4 md:px-5">
+          <h1 className="text-lg font-bold text-[#2c3e50]">Messages</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
             {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Conversation rows */}
+        <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 ? (
-            <div style={{ padding: "3rem 1.5rem", textAlign: "center" }}>
-              <MessageCircle size={40} style={{ color: "#e5e7eb", margin: "0 auto 1rem" }} />
-              <p style={{ fontSize: "0.875rem", color: "#9ca3af", fontWeight: 500 }}>No messages yet</p>
-              <p style={{ fontSize: "0.775rem", color: "#c4c9d4", marginTop: 4 }}>Companies will appear here when they message you</p>
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+              <MessageCircle size={40} className="text-gray-200" />
+              <p className="text-sm font-medium text-gray-400">No messages yet</p>
+              <p className="text-xs text-gray-300">
+                Companies will appear here when they message you
+              </p>
             </div>
           ) : (
             conversations.map((conv) => {
               const isActive = conv.id === activeConversationId
-              const unread = unreadMap[conv.id] ?? 0
-              const name = getName(conv.otherProfile)
-              const company = getCompany(conv.otherProfile)
+              const unread   = unreadMap[conv.id] ?? 0
+              const name     = getName(conv.otherProfile)
+              const company  = getCompany(conv.otherProfile)
               const initials = getInitials(conv.otherProfile)
 
               return (
                 <button
                   key={conv.id}
                   onClick={() => handleSelectConversation(conv.id)}
+                  className="w-full text-left transition-colors active:bg-gray-50"
                   style={{
-                    width: "100%",
                     display: "flex",
                     alignItems: "center",
                     gap: "0.75rem",
+                    // min 64px touch target on mobile
                     padding: "0.875rem 1.25rem",
+                    minHeight: 64,
                     background: isActive ? "rgba(255,155,135,0.08)" : "transparent",
-                    borderTop: "none",
-                    borderRight: "none",
-                    borderBottom: "none",
+                    border: "none",
                     borderLeft: isActive ? "3px solid #ff9b87" : "3px solid transparent",
                     cursor: "pointer",
-                    textAlign: "left",
-                    transition: "background 0.15s",
                   }}
                 >
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <Avatar style={{ width: 40, height: 40 }}>
+                  <div className="relative flex-shrink-0">
+                    <Avatar style={{ width: 44, height: 44 }}>
                       <AvatarImage src={conv.otherProfile?.avatar_url ?? undefined} />
-                      <AvatarFallback style={{ background: "linear-gradient(135deg,#ff9b87,#e8836f)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+                      <AvatarFallback
+                        style={{
+                          background: "linear-gradient(135deg,#ff9b87,#e8836f)",
+                          color: "#fff",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                        }}
+                      >
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    {unread > 0 && (
-                      <span style={{
-                        position: "absolute", top: -2, right: -2,
-                        background: "#e8836f", color: "#fff",
-                        borderRadius: 999, fontSize: "0.6rem", fontWeight: 700,
-                        minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                        padding: "0 3px",
-                      }}>
-                        {unread}
-                      </span>
-                    )}
+                  
+
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontWeight: unread > 0 ? 700 : 600, fontSize: "0.875rem", color: "#2c3e50", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}>
-                        {name}
-                      </span>
-                      <span style={{ fontSize: "0.7rem", color: "#9ca3af", flexShrink: 0, marginLeft: 4 }}>
-                        {formatTime(conv.lastMessage?.created_at ?? null)}
-                      </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p
+                        className="truncate text-sm font-semibold"
+                        style={{ color: "#2c3e50" }}
+                      >
+                        {company ?? name}
+                      </p>
+                      {conv.lastMessage?.created_at && (
+                        <span className="flex-shrink-0 text-xs text-gray-400">
+                          {formatTime(conv.lastMessage.created_at)}
+                        </span>
+                      )}
                     </div>
-                    {company && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 1 }}>
-                        <Building2 size={10} style={{ color: "#9ca3af" }} />
-                        <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{company}</span>
-                      </div>
-                    )}
-                    <p style={{
-                      fontSize: "0.775rem",
-                      color: unread > 0 ? "#4b5563" : "#9ca3af",
-                      fontWeight: unread > 0 ? 500 : 400,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                      marginTop: 2,
-                    }}>
+                    <p
+                      className="truncate text-xs mt-0.5"
+                      style={{
+                        color: unread > 0 ? "#4b5563" : "#9ca3af",
+                        fontWeight: unread > 0 ? 500 : 400,
+                      }}
+                    >
                       {conv.lastMessage
-                        ? (conv.lastMessage.sender_id === currentUserId ? "You: " : "") + conv.lastMessage.content
+                        ? (conv.lastMessage.sender_id === currentUserId ? "You: " : "") +
+                          conv.lastMessage.content
                         : "No messages yet"}
                     </p>
                   </div>
 
                   {unread > 0 && (
-                    <span style={{
-                      flexShrink: 0, background: "#e8836f", color: "#fff",
-                      borderRadius: 999, fontSize: "0.65rem", fontWeight: 700,
-                      padding: "2px 7px", marginLeft: 4,
-                    }}>
+                    <span
+                      className="flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      style={{ background: "#e8836f" }}
+                    >
                       {unread}
                     </span>
                   )}
@@ -290,90 +279,122 @@ export function MessagesClient({
         </div>
       </div>
 
-      {/* ── Chat Panel ── */}
+      {/* ── Chat Panel ───────────────────────────────────────────────
+           Mobile:  full width, hidden when list is showing
+           Desktop: fills remaining width                            */}
       <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
-        className={mobileView === "list" ? "hidden md:flex" : "flex"}
+        className={`
+          flex flex-col flex-1 min-w-0 bg-white
+          ${mobileView === "list" ? "hidden md:flex" : "flex"}
+        `}
       >
         {!activeConversationId ? (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", color: "#9ca3af" }}>
-            <div style={{ width: 64, height: 64, borderRadius: 20, background: "linear-gradient(135deg,rgba(255,155,135,0.15),rgba(255,155,135,0.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          /* Empty state — desktop only (mobile stays on list) */
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-gray-400">
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(255,155,135,0.1)" }}
+            >
               <MessageCircle size={28} style={{ color: "#ff9b87" }} />
             </div>
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontWeight: 600, color: "#4b5563", fontSize: "0.95rem" }}>Select a conversation</p>
-              <p style={{ fontSize: "0.825rem", marginTop: 4 }}>Choose from your messages on the left</p>
+            <div>
+              <p className="font-semibold text-gray-600">Select a conversation</p>
+              <p className="mt-1 text-sm">Choose from your messages on the left</p>
             </div>
           </div>
         ) : (
           <>
-            <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: "0.875rem", background: "#fff" }}>
+            {/* Chat header */}
+            <div
+              className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 py-3 md:px-5 md:py-4"
+            >
+              {/* Back button — mobile only */}
               <button
-                className="md:hidden"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
                 onClick={() => setMobileView("list")}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#6b7280" }}
+                aria-label="Back to conversations"
               >
                 <ArrowLeft size={20} />
               </button>
-              <Avatar style={{ width: 40, height: 40 }}>
+
+              <Avatar style={{ width: 40, height: 40, flexShrink: 0 }}>
                 <AvatarImage src={activeOtherProfile?.avatar_url ?? undefined} />
-                <AvatarFallback style={{ background: "linear-gradient(135deg,#ff9b87,#e8836f)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+                <AvatarFallback
+                  style={{
+                    background: "linear-gradient(135deg,#ff9b87,#e8836f)",
+                    color: "#fff",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                  }}
+                >
                   {getInitials(activeOtherProfile)}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <p style={{ fontWeight: 700, fontSize: "0.9rem", color: "#2c3e50", lineHeight: 1.2 }}>
-                  {getName(activeOtherProfile)}
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold" style={{ color: "#2c3e50" }}>
+                  {getCompany(activeOtherProfile) ?? getName(activeOtherProfile)}
                 </p>
                 {getCompany(activeOtherProfile) && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                    <Building2 size={11} style={{ color: "#9ca3af" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>{getCompany(activeOtherProfile)}</span>
-                  </div>
+                  <p className="truncate text-xs text-gray-400">
+                    {getName(activeOtherProfile)}
+                  </p>
                 )}
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {messages.length === 0 && (
-                <div style={{ textAlign: "center", marginTop: "2rem", color: "#9ca3af", fontSize: "0.875rem" }}>
-                  No messages yet. Say hello! 👋
-                </div>
-              )}
-              {messages.map((msg, i) => {
-                const isMe = msg.sender_id === currentUserId
-                const prevMsg = messages[i - 1]
-                const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id
-                return (
-                  <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                    {!isMe && isFirstInGroup && (
-                      <span style={{ fontSize: "0.7rem", color: "#9ca3af", marginBottom: 3, marginLeft: 8 }}>
-                        {msg.sender_profile?.first_name} {msg.sender_profile?.last_name}
-                      </span>
-                    )}
-                    <div style={{
-                      maxWidth: "68%",
-                      padding: "0.625rem 0.875rem",
-                      borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                      background: isMe ? "linear-gradient(135deg,#ff9b87,#e8836f)" : "#f3f4f6",
-                      color: isMe ? "#fff" : "#2c3e50",
-                      fontSize: "0.875rem",
-                      lineHeight: 1.5,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}>
-                      {msg.content}
-                    </div>
-                    <span style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 3, marginLeft: 4, marginRight: 4 }}>
-                      {formatTime(msg.created_at)}
-                    </span>
+            {/* Messages scroll area */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 md:px-5">
+              <div className="flex flex-col gap-3">
+                {messages.length === 0 && (
+                  <div className="py-12 text-center text-sm text-gray-400">
+                    No messages yet. Say hello! 👋
                   </div>
-                )
-              })}
-              <div ref={scrollRef} />
+                )}
+                {messages.map((msg, index) => {
+                  const isMe = msg.sender_id === currentUserId
+                  const isFirstInGroup =
+                    index === 0 || messages[index - 1].sender_id !== msg.sender_id
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className="flex flex-col"
+                      style={{ alignItems: isMe ? "flex-end" : "flex-start" }}
+                    >
+                      {!isMe && isFirstInGroup && (
+                        <span className="mb-1 pl-2 text-xs text-gray-400">
+                          {msg.sender_profile?.first_name} {msg.sender_profile?.last_name}
+                        </span>
+                      )}
+                      <div
+                        className="max-w-[78%] px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap md:max-w-[65%]"
+                        style={{
+                          borderRadius: isMe
+                            ? "18px 18px 4px 18px"
+                            : "18px 18px 18px 4px",
+                          background: isMe
+                            ? "linear-gradient(135deg,#ff9b87,#e8836f)"
+                            : "#f3f4f6",
+                          color: isMe ? "#fff" : "#2c3e50",
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                      <span className="mt-1 px-1 text-[11px] text-gray-400">
+                        {formatTime(msg.created_at)}
+                      </span>
+                    </div>
+                  )
+                })}
+                <div ref={scrollRef} />
+              </div>
             </div>
 
-            <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid #f3f4f6", background: "#fff", display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
+            {/* Input bar — padding-bottom accounts for iOS home indicator */}
+            <div
+              className="flex flex-shrink-0 items-end gap-2 border-t border-gray-100 bg-white px-3 py-3 pb-safe md:px-5 md:py-4"
+            >
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -383,27 +404,23 @@ export function MessagesClient({
                     handleSend()
                   }
                 }}
-                placeholder="Type a message... (Enter to send)"
+                placeholder="Type a message…"
                 rows={1}
-                style={{
-                  flex: 1, resize: "none", border: "1px solid #e5e7eb", borderRadius: 12,
-                  padding: "0.625rem 0.875rem", fontSize: "0.875rem", fontFamily: "inherit",
-                  outline: "none", lineHeight: 1.5, maxHeight: 120, overflowY: "auto",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#ff9b87")}
-                onBlur={(e) => (e.target.style.borderColor = "#e5e7eb")}
+                className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-[#ff9b87] focus:bg-white"
+                style={{ maxHeight: 120, overflowY: "auto", fontFamily: "inherit" }}
               />
               <button
                 onClick={handleSend}
                 disabled={!text.trim() || sending}
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border-none transition-all active:scale-95 disabled:cursor-not-allowed"
                 style={{
-                  width: 42, height: 42, borderRadius: 12, border: "none", cursor: "pointer",
-                  background: text.trim() && !sending ? "linear-gradient(135deg,#ff9b87,#e8836f)" : "#f3f4f6",
+                  background:
+                    text.trim() && !sending
+                      ? "linear-gradient(135deg,#ff9b87,#e8836f)"
+                      : "#f3f4f6",
                   color: text.trim() && !sending ? "#fff" : "#9ca3af",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, transition: "all 0.15s",
                 }}
+                aria-label="Send message"
               >
                 <Send size={16} />
               </button>
