@@ -1,4 +1,6 @@
 import { createClient } from "@/utils/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import { CompanyMessagesClient } from "./messages-client"
 
@@ -41,14 +43,17 @@ export default async function CompanyMessagesPage({
     conversations = data ?? []
   }
 
-  // Mark active conversation as read server-side
+  // Mark active conversation as read server-side (service role bypasses RLS)
   if (activeConversationId && conversationIds.includes(activeConversationId)) {
-    await supabase
+    const adminSupabase = createSupabaseClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    await adminSupabase
       .from("messages")
       .update({ is_read: true })
       .eq("conversation_id", activeConversationId)
       .neq("sender_id", user.id)
-      .eq("is_read", false)
   }
 
   const enriched = conversations.map((conv) => {

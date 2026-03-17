@@ -1,4 +1,6 @@
 import { createClient } from "@/utils/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import { MessagesClient } from "./messages-client"
 
@@ -57,7 +59,20 @@ export default async function StudentMessagesPage({
     conversations = data ?? []
   }
 
-  // Build enriched list — unread count from DB (client will zero it out instantly)
+  // Mark active conversation as read server-side (service role bypasses RLS)
+  if (activeConversationId && conversationIds.includes(activeConversationId)) {
+    const adminSupabase = createSupabaseClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    await adminSupabase
+      .from("messages")
+      .update({ is_read: true })
+      .eq("conversation_id", activeConversationId)
+      .neq("sender_id", user.id)
+  }
+
+  // Build enriched list — force unreadCount=0 for the active conversation
   const enriched = conversations.map((conv) => {
     const otherParticipant = conv.conversation_participants?.find(
       (p: any) => p.profile_id !== user.id
@@ -70,9 +85,10 @@ export default async function StudentMessagesPage({
     )
     const lastMessage = sortedMessages[0] ?? null
 
-    const unreadCount = (conv.messages ?? []).filter(
-      (m: any) => !m.is_read && m.sender_id !== user.id
-    ).length
+    const unreadCount = conv.id === activeConversationId ? 0 :
+      (conv.messages ?? []).filter(
+        (m: any) => !m.is_read && m.sender_id !== user.id
+      ).length
 
     return { id: conv.id, otherProfile, lastMessage, unreadCount }
   })

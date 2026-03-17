@@ -36,7 +36,7 @@ const milestoneSchema = z.object({
   requiresGithub: z.boolean().default(false),
   requiresUrl: z.boolean().default(false),
   requiresText: z.boolean().default(false),
-  criteria: z.array(criterionSchema).default([]),
+  criteria: z.array(criterionSchema).min(1, "At least one scoring criterion is required"),
 })
 
 const formSchema = z.object({
@@ -78,6 +78,18 @@ const formSchema = z.object({
   // Step 5: Scoring Mode
   scoringMode: z.enum(["company_only", "evaluator_only", "average"]).default("company_only"),
 }).superRefine((data, ctx) => {
+  // Start date cannot be in the past
+  if (data.startDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (data.startDate < today) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Start date cannot be in the past",
+        path: ["startDate"],
+      });
+    }
+  }
   // End date required unless perpetual
   if (!data.isPerpetual && !data.endDate) {
     ctx.addIssue({
@@ -600,6 +612,11 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                         mode="single"
                         selected={watchedValues.startDate}
                         onSelect={(date) => date && form.setValue("startDate", date, { shouldValidate: true })}
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          return date < today;
+                        }}
                         initialFocus
                       />
                     </PopoverContent>
@@ -763,7 +780,7 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                     {/* Scoring Criteria */}
                     <div className="space-y-2 pt-3 border-t">
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs text-muted-foreground">Scoring Criteria <span className="text-muted-foreground">(optional)</span></Label>
+                        <Label className="text-xs text-muted-foreground">Scoring Criteria</Label>
                         <Button
                           type="button"
                           variant="ghost"
@@ -809,6 +826,11 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                           </Button>
                         </div>
                       ))}
+                      {(form.formState.errors.milestones?.[index]?.criteria?.root?.message || form.formState.errors.milestones?.[index]?.criteria?.message) && (
+                        <p className="text-xs text-destructive">
+                          {form.formState.errors.milestones?.[index]?.criteria?.root?.message ?? form.formState.errors.milestones?.[index]?.criteria?.message}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

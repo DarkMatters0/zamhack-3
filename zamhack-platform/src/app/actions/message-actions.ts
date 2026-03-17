@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { Database } from "@/types/supabase";
 
 export async function getOrCreateDirectConversation(studentId: string) {
   const supabase = await createClient();
@@ -156,12 +158,17 @@ export async function markConversationAsRead(conversationId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Not authenticated" }
 
-  await supabase
+  // Use service role client to bypass RLS — the UPDATE targets other users'
+  // messages (sender_id != user.id), which RLS would otherwise block.
+  const adminSupabase = createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  await adminSupabase
     .from("messages")
     .update({ is_read: true })
     .eq("conversation_id", conversationId)
     .neq("sender_id", user.id)
-    .eq("is_read", false)
 
   return { success: true }
 }
