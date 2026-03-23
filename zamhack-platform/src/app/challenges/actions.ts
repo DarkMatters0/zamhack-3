@@ -407,29 +407,36 @@ export async function closeChallenge(challengeId: string, forceClose = false): P
     let orderedResults = rankedResults
 
     if (scoringMode === "average") {
-      // Convert normalizedScoreAvg (0–1) to 0–100, then average with company score
+      // Sort by raw mean + company score blend for average mode
       orderedResults = [...rankedResults].sort((a, b) => {
-        const aEval = Math.round(a.normalizedScoreAvg * 100)
-        const bEval = Math.round(b.normalizedScoreAvg * 100)
-        const aCompany = companyScores.get(a.participantId) ?? 0
-        const bCompany = companyScores.get(b.participantId) ?? 0
-        const aFinal = (aEval + aCompany) / 2
-        const bFinal = (bEval + bCompany) / 2
+        const aScores = evaluatorScores.filter((s) => s.participantId === a.participantId).map((s) => s.rawScore)
+        const bScores = evaluatorScores.filter((s) => s.participantId === b.participantId).map((s) => s.rawScore)
+        const aRawMean = aScores.length > 0 ? aScores.reduce((x, y) => x + y, 0) / aScores.length : 0
+        const bRawMean = bScores.length > 0 ? bScores.reduce((x, y) => x + y, 0) / bScores.length : 0
+        const aFinal = (aRawMean + (companyScores.get(a.participantId) ?? 0)) / 2
+        const bFinal = (bRawMean + (companyScores.get(b.participantId) ?? 0)) / 2
         return bFinal - aFinal
       })
       // Re-assign finalRank after re-sort
       orderedResults.forEach((r, i) => { r.finalRank = i + 1 })
     }
 
+    // Compute raw mean per participant for display
+    const rawMeanMap = new Map<string, number>()
+    const uniqueParticipantIds = [...new Set(evaluatorScores.map((s) => s.participantId))]
+    for (const pid of uniqueParticipantIds) {
+      const scores = evaluatorScores
+        .filter((s) => s.participantId === pid)
+        .map((s) => s.rawScore)
+      rawMeanMap.set(pid, scores.reduce((a, b) => a + b, 0) / scores.length)
+    }
+
     winners = orderedResults.slice(0, 3).map((r) => {
+      const rawMean = rawMeanMap.get(r.participantId) ?? 0
       const displayScore =
         scoringMode === "average"
-          ? Math.round(
-              (Math.round(r.normalizedScoreAvg * 100) +
-                (companyScores.get(r.participantId) ?? 0)) /
-                2
-            )
-          : Math.round(r.normalizedScoreAvg * 100)
+          ? Math.round((rawMean + (companyScores.get(r.participantId) ?? 0)) / 2)
+          : Math.round(rawMean)
 
       return {
         challenge_id: challengeId,
@@ -655,27 +662,35 @@ export async function recalculateWinners(challengeId: string): Promise<{ success
     let orderedResults = rankedResults
 
     if (scoringMode === "average") {
+      // Sort by raw mean + company score blend for average mode
       orderedResults = [...rankedResults].sort((a, b) => {
-        const aEval = Math.round(a.normalizedScoreAvg * 100)
-        const bEval = Math.round(b.normalizedScoreAvg * 100)
-        const aCompany = companyScores.get(a.participantId) ?? 0
-        const bCompany = companyScores.get(b.participantId) ?? 0
-        const aFinal = (aEval + aCompany) / 2
-        const bFinal = (bEval + bCompany) / 2
+        const aScores = evaluatorScores.filter((s) => s.participantId === a.participantId).map((s) => s.rawScore)
+        const bScores = evaluatorScores.filter((s) => s.participantId === b.participantId).map((s) => s.rawScore)
+        const aRawMean = aScores.length > 0 ? aScores.reduce((x, y) => x + y, 0) / aScores.length : 0
+        const bRawMean = bScores.length > 0 ? bScores.reduce((x, y) => x + y, 0) / bScores.length : 0
+        const aFinal = (aRawMean + (companyScores.get(a.participantId) ?? 0)) / 2
+        const bFinal = (bRawMean + (companyScores.get(b.participantId) ?? 0)) / 2
         return bFinal - aFinal
       })
       orderedResults.forEach((r, i) => { r.finalRank = i + 1 })
     }
 
+    // Compute raw mean per participant for display
+    const rawMeanMap = new Map<string, number>()
+    const uniqueParticipantIds = [...new Set(evaluatorScores.map((s) => s.participantId))]
+    for (const pid of uniqueParticipantIds) {
+      const scores = evaluatorScores
+        .filter((s) => s.participantId === pid)
+        .map((s) => s.rawScore)
+      rawMeanMap.set(pid, scores.reduce((a, b) => a + b, 0) / scores.length)
+    }
+
     winners = orderedResults.slice(0, 3).map((r) => {
+      const rawMean = rawMeanMap.get(r.participantId) ?? 0
       const displayScore =
         scoringMode === "average"
-          ? Math.round(
-              (Math.round(r.normalizedScoreAvg * 100) +
-                (companyScores.get(r.participantId) ?? 0)) /
-                2
-            )
-          : Math.round(r.normalizedScoreAvg * 100)
+          ? Math.round((rawMean + (companyScores.get(r.participantId) ?? 0)) / 2)
+          : Math.round(rawMean)
 
       return {
         challenge_id: challengeId,

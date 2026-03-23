@@ -6,6 +6,7 @@ CREATE TABLE public.challenge_evaluators (
   evaluator_id uuid NOT NULL,
   assigned_at timestamp with time zone DEFAULT now(),
   review_deadline timestamp with time zone,
+  is_chief boolean NOT NULL DEFAULT false,
   CONSTRAINT challenge_evaluators_pkey PRIMARY KEY (challenge_id, evaluator_id),
   CONSTRAINT challenge_evaluators_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
   CONSTRAINT challenge_evaluators_evaluator_id_fkey FOREIGN KEY (evaluator_id) REFERENCES public.profiles(id)
@@ -303,6 +304,8 @@ CREATE TABLE public.winners (
   prize text,
   announced_at timestamp with time zone DEFAULT now(),
   score integer,
+  is_tied boolean NOT NULL DEFAULT false,
+  tie_resolved_by uuid REFERENCES public.profiles(id),
   CONSTRAINT winners_pkey PRIMARY KEY (id),
   CONSTRAINT winners_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
   CONSTRAINT winners_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
