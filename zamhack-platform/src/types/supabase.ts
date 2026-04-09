@@ -221,6 +221,7 @@ export type Database = {
           status: Database["public"]["Enums"]["challenge_status"] | null
           title: string
           updated_at: string | null
+          xp_multiplier: number | null
         }
         Insert: {
           created_at?: string | null
@@ -249,6 +250,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["challenge_status"] | null
           title: string
           updated_at?: string | null
+          xp_multiplier?: number | null
         }
         Update: {
           created_at?: string | null
@@ -277,6 +279,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["challenge_status"] | null
           title?: string
           updated_at?: string | null
+          xp_multiplier?: number | null
         }
         Relationships: [
           {
@@ -604,6 +607,10 @@ export type Database = {
           id: boolean
           maintenance_mode: boolean | null
           updated_at: string | null
+          xp_base_max: number | null
+          xp_base_min: number | null
+          xp_penalty: number | null
+          xp_score_threshold: number | null
         }
         Insert: {
           advanced_beginner_weekly_limit?: number | null
@@ -612,6 +619,10 @@ export type Database = {
           id?: boolean
           maintenance_mode?: boolean | null
           updated_at?: string | null
+          xp_base_max?: number | null
+          xp_base_min?: number | null
+          xp_penalty?: number | null
+          xp_score_threshold?: number | null
         }
         Update: {
           advanced_beginner_weekly_limit?: number | null
@@ -620,6 +631,10 @@ export type Database = {
           id?: boolean
           maintenance_mode?: boolean | null
           updated_at?: string | null
+          xp_base_max?: number | null
+          xp_base_min?: number | null
+          xp_penalty?: number | null
+          xp_score_threshold?: number | null
         }
         Relationships: []
       }
