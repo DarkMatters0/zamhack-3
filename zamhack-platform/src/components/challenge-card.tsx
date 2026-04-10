@@ -31,6 +31,8 @@ interface ChallengeCardProps {
    * so the student sees their progress page with feedback.
    */
   isParticipant?: boolean
+  /** XP range the student can earn from this challenge (personalised to their rank). */
+  xpRange?: { min: number; max: number } | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,7 +112,7 @@ function orgAccentClass(name: string | undefined | null): string {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ChallengeCard({ challenge, perpetualResultsHref, isParticipant }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, perpetualResultsHref, isParticipant, xpRange }: ChallengeCardProps) {
   const isClosed    = challenge.status === "closed" || challenge.status === "completed"
   const isCancelled = challenge.status === "cancelled"
   const isPerpetual = (challenge as any).is_perpetual === true
@@ -204,6 +206,13 @@ export function ChallengeCard({ challenge, perpetualResultsHref, isParticipant }
           <CalendarDays size={13} />
           <span>{isPerpetual ? "No deadline" : deadline.label}</span>
         </div>
+
+        {xpRange && (
+          <div className="cc-meta-item" style={isInactive ? { opacity: 0.5 } : undefined}>
+            <Zap size={13} />
+            <span>{xpRange.min}–{xpRange.max} XP</span>
+          </div>
+        )}
       </div>
 
       {/* ── Participation type + location pills ── */}

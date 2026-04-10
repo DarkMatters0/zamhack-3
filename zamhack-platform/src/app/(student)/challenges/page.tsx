@@ -98,6 +98,26 @@ async function getChallenges(searchParams: {
   return (data as unknown as ChallengeWithOrg[]) || []
 }
 
+const RANK_MULTIPLIER: Record<string, Record<string, number>> = {
+  beginner:     { beginner: 1.0, intermediate: 1.5, advanced: 2.0 },
+  intermediate: { beginner: 0.5, intermediate: 1.0, advanced: 1.5 },
+  advanced:     { beginner: 0.2, intermediate: 0.5, advanced: 1.0 },
+}
+
+function computeXpRange(
+  studentRank: string,
+  difficulty: string | null,
+  xpMultiplier: number,
+  baseMin: number,
+  baseMax: number,
+): { min: number; max: number } {
+  const rm = RANK_MULTIPLIER[studentRank]?.[difficulty ?? "beginner"] ?? 1.0
+  return {
+    min: Math.round(baseMin * rm * xpMultiplier),
+    max: Math.round(baseMax * rm * xpMultiplier),
+  }
+}
+
 export default async function ChallengesPage({ searchParams }: ChallengesPageProps) {
   const supabase = await createClient()
   const params = await searchParams
@@ -109,6 +129,21 @@ export default async function ChallengesPage({ searchParams }: ChallengesPagePro
   const perpetualCompletedSet = new Set<string>()
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Fetch student rank + XP formula settings for the XP range badge
+  let studentRank = "beginner"
+  let xpBaseMin = 50
+  let xpBaseMax = 400
+
+  if (user) {
+    const [{ data: profileRow }, { data: xpSettings }] = await Promise.all([
+      supabase.from("profiles").select("xp_rank").eq("id", user.id).single(),
+      supabase.from("platform_settings").select("xp_base_min, xp_base_max").single(),
+    ])
+    studentRank = (profileRow as any)?.xp_rank ?? "beginner"
+    xpBaseMin = (xpSettings as any)?.xp_base_min ?? 50
+    xpBaseMax = (xpSettings as any)?.xp_base_max ?? 400
+  }
 
   if (user && challenges.length > 0) {
     // 1. Get IDs of perpetual challenges in this result set (dedicated query)
@@ -180,6 +215,13 @@ export default async function ChallengesPage({ searchParams }: ChallengesPagePro
                   ? `/challenges/${challenge.id}`
                   : undefined
               }
+              xpRange={computeXpRange(
+                studentRank,
+                challenge.difficulty,
+                (challenge as any).xp_multiplier ?? 1.0,
+                xpBaseMin,
+                xpBaseMax,
+              )}
             />
           ))}
         </div>

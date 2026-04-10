@@ -27,6 +27,7 @@ async function getProfileData() {
     { data: studentSkillsRaw },
     { data: allSkills },
     { data: earnedSkillsRaw },
+    { data: xpSettings },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
 
@@ -45,11 +46,17 @@ async function getProfileData() {
       .select("id, tier, source, awarded_at, skill:skills(id, name, category), challenge:challenges(id, title)")
       .eq("profile_id", user.id)
       .order("awarded_at", { ascending: false }) as any),
+
+    supabase
+      .from("platform_settings")
+      .select("xp_score_threshold, xp_penalty, xp_base_min, xp_base_max")
+      .single(),
   ])
 
   return {
     profile: profile as Profile | null,
     user,
+    xpSettings: xpSettings as Record<string, number> | null,
     studentSkills: (studentSkillsRaw ?? []) as Array<{
       id: string
       level: Database["public"]["Enums"]["proficiency_level"]
@@ -76,7 +83,7 @@ const getInitials = (firstName: string | null, lastName: string | null): string 
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default async function ProfilePage() {
-  const { profile, user, studentSkills, allSkills, earnedSkills } = await getProfileData()
+  const { profile, user, xpSettings, studentSkills, allSkills, earnedSkills } = await getProfileData()
 
   const fullName = profile
     ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || "User"
@@ -156,6 +163,10 @@ export default async function ProfilePage() {
           <XpCard
             xpPoints={(profile as any)?.xp_points ?? 0}
             xpRank={(profile as any)?.xp_rank ?? "beginner"}
+            scoreThreshold={(xpSettings as any)?.xp_score_threshold ?? 70}
+            penalty={(xpSettings as any)?.xp_penalty ?? 50}
+            baseMin={(xpSettings as any)?.xp_base_min ?? 50}
+            baseMax={(xpSettings as any)?.xp_base_max ?? 400}
           />
 
           {/* About Me */}
