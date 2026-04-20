@@ -28,7 +28,7 @@ export async function signup(formData: FormData) {
     company_name: companyName || null,
   }
 
-  const { error } = await supabase.auth.signUp({
+  const {data: authData,  error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -39,6 +39,15 @@ export async function signup(formData: FormData) {
   if (error) {
     return { error: error.message }
   }
+
+  // If the user was created immediately (email confirmation disabled),
+// write university directly to the profile row as the trigger may miss it
+if (authData?.user && university) {
+  await supabase
+    .from("profiles")
+    .update({ university: university })
+    .eq("id", authData.user.id)
+}
 
   // If email confirmation is enabled, they need to check email.
   // If disabled, they are logged in.
