@@ -23,6 +23,7 @@ import DownloadCertificateButton from "@/components/certificate/download-certifi
 import { RubricCriteriaCard } from "@/components/rubric-criteria-card"
 import { checkParticipationGate, type GateResult } from "@/lib/participation-gate"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { RANK_TITLES } from "@/lib/rank-titles"
 
 // --- Types ---
 type Challenge = Database["public"]["Tables"]["challenges"]["Row"]
@@ -183,9 +184,9 @@ function RankAdvisoryBanner({
   currentRank: string
 }) {
   const label: Record<string, string> = {
-    beginner: "Beginner",
-    intermediate: "Intermediate",
-    advanced: "Advanced",
+    beginner:     RANK_TITLES.beginner,
+    intermediate: RANK_TITLES.intermediate,
+    advanced:     RANK_TITLES.advanced,
   }
   return (
     <Alert className="border-amber-200 bg-amber-50 text-amber-900">

@@ -319,7 +319,7 @@ export default async function AdminUsersPage({
                     <th>Affiliation</th>
                     <th>Status</th>
                     <th>Joined</th>
-                    <th style={{ textAlign: "right" }}>Actions</th>
+                    {activeTab !== "admins" && <th style={{ textAlign: "right" }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -375,13 +375,15 @@ export default async function AdminUsersPage({
                           {formatDate(profile.created_at)}
                         </td>
 
-                        <td style={{ textAlign: "right" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.375rem" }}>
-                            <AdjustXpButton userId={profile.id} role={profile.role} currentXp={(profile as any).xp_points ?? 0} currentRank={(profile as any).xp_rank ?? "beginner"} />
-                            <GrantSkillButton userId={profile.id} role={profile.role} skills={skillsList} />
-                            <UserActionsCell userId={profile.id} status={userProfile.status} />
-                          </div>
-                        </td>
+                        {profile.role !== "admin" && (
+                          <td style={{ textAlign: "right" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.375rem" }}>
+                              <AdjustXpButton userId={profile.id} role={profile.role} currentXp={(profile as any).xp_points ?? 0} currentRank={(profile as any).xp_rank ?? "beginner"} />
+                              <GrantSkillButton userId={profile.id} role={profile.role} skills={skillsList} />
+                              <UserActionsCell userId={profile.id} status={userProfile.status} />
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Zap, Info, X } from "lucide-react"
+import { RANK_TITLES } from "@/lib/rank-titles"
 
 const RANK_STYLES: Record<string, string> = {
   beginner:     "text-teal-700 bg-teal-50 border-teal-200",
@@ -10,9 +11,9 @@ const RANK_STYLES: Record<string, string> = {
 }
 
 const RANK_LABEL: Record<string, string> = {
-  beginner: "Beginner",
-  intermediate: "Intermediate",
-  advanced: "Advanced",
+  beginner:     RANK_TITLES.beginner,
+  intermediate: RANK_TITLES.intermediate,
+  advanced:     RANK_TITLES.advanced,
 }
 
 const NEXT_RANK: Record<string, string | null> = {
@@ -42,9 +43,9 @@ interface XpCardProps {
 }
 
 const MULTIPLIER_TABLE = [
-  { rank: "Beginner",     beginner: "1.0×", intermediate: "1.5×", advanced: "2.0×" },
-  { rank: "Intermediate", beginner: "0.5×", intermediate: "1.0×", advanced: "1.5×" },
-  { rank: "Advanced",     beginner: "0.2×", intermediate: "0.5×", advanced: "1.0×" },
+  { rank: RANK_TITLES.beginner,     beginner: "1.0×", intermediate: "1.5×", advanced: "2.0×" },
+  { rank: RANK_TITLES.intermediate, beginner: "0.5×", intermediate: "1.0×", advanced: "1.5×" },
+  { rank: RANK_TITLES.advanced,     beginner: "0.2×", intermediate: "0.5×", advanced: "1.0×" },
 ]
 
 function XpInfoDialog({
@@ -141,13 +142,13 @@ function XpInfoDialog({
           <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "#374151" }}>Rank thresholds</p>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.78rem", background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4", borderRadius: "0.375rem", padding: "0.25rem 0.625rem", fontWeight: 600 }}>
-              Beginner · 0 – 2,000 XP
+              {RANK_TITLES.beginner} · 0 – 2,000 XP
             </span>
             <span style={{ fontSize: "0.78rem", background: "#faf5ff", color: "#7e22ce", border: "1px solid #e9d5ff", borderRadius: "0.375rem", padding: "0.25rem 0.625rem", fontWeight: 600 }}>
-              Intermediate · 2,001 – 5,000 XP
+              {RANK_TITLES.intermediate} · 2,001 – 5,000 XP
             </span>
             <span style={{ fontSize: "0.78rem", background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a", borderRadius: "0.375rem", padding: "0.25rem 0.625rem", fontWeight: 600 }}>
-              Advanced · 5,001+ XP
+              {RANK_TITLES.advanced} · 5,001+ XP
             </span>
           </div>
         </div>

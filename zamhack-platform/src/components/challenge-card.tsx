@@ -121,7 +121,9 @@ export function ChallengeCard({ challenge, perpetualResultsHref, isParticipant, 
   // If perpetualResultsHref is passed the student completed this perpetual challenge
   const isPerpetualCompleted = !!perpetualResultsHref
 
-  const deadline    = formatDeadline(challenge.end_date)
+  const deadline    = (isClosed || isCancelled)
+    ? { label: "Ended", urgent: false }
+    : formatDeadline(challenge.end_date)
   const accentClass = orgAccentClass(challenge.organization?.name)
 
   // For closed non-perpetual challenges, link directly to the official results/leaderboard

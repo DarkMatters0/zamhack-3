@@ -170,6 +170,14 @@ export default function EditChallengeForm({
     setLoading(true);
     setError(null);
 
+    for (const m of milestones) {
+      if (!m.requires_github && !m.requires_url && !m.requires_text) {
+        setError(`Milestone "${m.title}" must require at least one submission type.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const result = await updateChallenge(challenge.id, {
         title,

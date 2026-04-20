@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import type { StudentWithStats } from "./page"
 import { MessageModal } from "./message-modal"
+import { getRankTitle } from "@/lib/rank-titles"
 
 interface TalentGridProps {
   initialStudents: StudentWithStats[]
@@ -365,6 +366,19 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                         )}
                       </div>
                     </div>
+                    {student.highestTier && (
+                      <span style={{
+                        display: "inline-block",
+                        padding: "0.2rem 0.625rem",
+                        borderRadius: "99px",
+                        fontSize: "0.7rem", fontWeight: 700,
+                        background: "rgba(99,102,241,0.1)",
+                        color: "#4F46E5",
+                        width: "fit-content",
+                      }}>
+                        {getRankTitle(student.highestTier)}
+                      </span>
+                    )}
                     {student.bio && (
                       <p style={{
                         fontSize: "0.8125rem", color: "var(--cp-text-secondary)",
@@ -724,6 +738,21 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                       )}
                     </div>
                   </div>
+
+                  {/* Rank title */}
+                  {student.highestTier && (
+                    <span style={{
+                      display: "inline-block",
+                      padding: "0.2rem 0.625rem",
+                      borderRadius: "99px",
+                      fontSize: "0.7rem", fontWeight: 700,
+                      background: "rgba(99,102,241,0.1)",
+                      color: "#4F46E5",
+                      width: "fit-content",
+                    }}>
+                      {getRankTitle(student.highestTier)}
+                    </span>
+                  )}
 
                   {/* Bio */}
                   {student.bio && (

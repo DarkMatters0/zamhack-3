@@ -190,6 +190,66 @@ Students earn skills from `challenge_skills` into `student_earned_skills` upon c
 
 Logic in `src/lib/scoring-utils.ts` (`getFinalScore`). Used in `closeChallenge()` and `recalculateWinners()`.
 
+### XP Rank System
+
+Students earn XP points from graded challenge submissions. XP determines their **XP Rank**, a platform-wide progression level stored in `profiles.xp_points` and `profiles.xp_rank`.
+
+**Rank thresholds:**
+- `beginner` — 0 to 2,000 XP
+- `intermediate` — 2,001 to 5,000 XP
+- `advanced` — 5,001+ XP
+
+**Rank is always derived from total XP** via `deriveRank()` in `src/lib/award-xp.ts`. The `xp_rank` column on `profiles` is updated atomically with `xp_points` after every XP award.
+
+**XP formula** (implemented in `awardXp()` in `src/lib/award-xp.ts`):
+1. Base XP = linear scale from `baseMin` (50) to `baseMax` (400) based on score ≥ `scoreThreshold` (70). Score below threshold = `−penalty` (50 XP).
+2. Base XP × difficulty multiplier (determined by student's current rank vs. challenge difficulty):
+   - Beginner rank: 1.0× beginner, 1.5× intermediate, 2.0× advanced
+   - Intermediate rank: 0.5× beginner, 1.0× intermediate, 1.5× advanced
+   - Advanced rank: 0.2× beginner, 0.5× intermediate, 1.0× advanced
+3. Penalty (negative XP) only applies to `advanced` rank students. Beginner/intermediate scores below threshold earn 0 XP instead.
+4. Per-challenge `xp_multiplier` bonus can be configured at challenge creation time.
+
+**When XP is awarded:**
+- `closeChallenge()` in `src/app/challenges/actions.ts` — loops over all active participants, computes `getFinalScore`, calls `awardXp()` for each.
+- `submitEvaluation()` in `src/app/challenges/grading-actions.ts` — awards XP immediately when a company reviewer submits a final (non-draft) evaluation.
+
+**XP Rank gate** — XP rank also gates access to higher-difficulty challenges (separate from the skill gate):
+- `intermediate` challenges require `xp_rank = "intermediate"` or `"advanced"` to join (hard block).
+- `advanced` challenges require `xp_rank = "advanced"` to join (hard block).
+- Students below the required rank are redirected to `src/app/(student)/challenges/[id]/rank-gate/page.tsx`.
+- Students who meet the skill gate but are below the XP rank for an intermediate/advanced challenge see an advisory banner (`xp_rank_advisory`) but can still join.
+
+**Gate result shapes** (from `src/lib/participation-gate.ts`):
+- `{ reason: "xp_rank_gate", requiredRank, currentRank }` — hard block, redirects to rank-gate page
+- `{ reason: "xp_rank_advisory", challengeRank, currentRank }` — soft warning, join still allowed
+
+**Descriptive rank titles** (`src/lib/rank-titles.ts`): The raw rank keys are mapped to display titles everywhere a rank label is shown to users:
+- `beginner` → "Emerging Innovator"
+- `intermediate` → "Rising Challenger"
+- `advanced` → "Elite Contributor"
+
+**IMPORTANT:** Always read rank labels from `RANK_TITLES` in `src/lib/rank-titles.ts`. Never hardcode "Beginner", "Intermediate", or "Advanced" as display strings for XP rank. The skill tier labels in `skills-section.tsx` (earned/portfolio skills) intentionally keep the plain "Beginner / Intermediate / Advanced" labels — only XP rank display uses the descriptive titles.
+
+**Where XP rank is surfaced:**
+- Student profile XP card: `src/components/profile/xp-card.tsx`
+- Student dashboard stat: `src/app/(student)/dashboard/page.tsx`
+- Rank-gate page: `src/app/(student)/challenges/[id]/rank-gate/page.tsx`
+- Challenge page advisory banner: `src/app/(student)/challenges/[id]/page.tsx` (`RankAdvisoryBanner`)
+- Challenge results leaderboard: `src/app/(student)/challenges/[id]/results/page.tsx` (reads `xp_rank` from `profiles` join on winners)
+- Company talent search cards: `src/app/(company)/company/talent/talent-grid.tsx` (reads `xp_rank` from `profiles.*`)
+- Company talent profile: `src/app/(company)/company/talent/[id]/page.tsx` (via `LEVEL_CONFIG`)
+- Company submission review: `src/app/(company)/company/challenges/[id]/submissions/[submissionId]/page.tsx` (reads `xp_rank` from fetched profile)
+- Admin user management: `src/app/(admin)/admin/users/page.tsx` (adjust XP button via `adjust-xp-button.tsx`)
+
+**Admin XP adjustment:** Admins can manually add or deduct XP from any student via `src/app/(admin)/admin/users/adjust-xp-button.tsx`, which calls `adjustXp()` in `src/app/admin/actions.ts`. Rank is recomputed and updated alongside the XP.
+
+**Database columns required on `profiles`:**
+```sql
+xp_points integer DEFAULT 0
+xp_rank   text    DEFAULT 'beginner'  -- 'beginner' | 'intermediate' | 'advanced'
+```
+
 ## Environment Variables
 
 Required in `zamhack-platform/.env.local`:

@@ -10,7 +10,6 @@ import {
   Users,
   FileText,
   ArrowUpDown,
-  ExternalLink,
 } from "lucide-react"
 
 interface ChallengeWithStats {
@@ -401,14 +400,6 @@ export function ChallengesTable({ challenges }: ChallengesTableProps) {
                         className="cp-btn cp-btn-primary cp-btn-sm"
                       >
                         Manage
-                      </Link>
-                      {/* FIX: added aria-label so screen readers can identify this icon-only button */}
-                      <Link
-                        href={`/company/challenges/${challenge.id}`}
-                        className="cp-btn cp-btn-ghost cp-btn-sm cp-btn-icon"
-                        aria-label={`Open ${challenge.title}`}
-                      >
-                        <ExternalLink style={{ width: "0.875rem", height: "0.875rem" }} />
                       </Link>
                     </div>
                   </td>

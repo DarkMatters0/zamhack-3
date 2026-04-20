@@ -37,7 +37,13 @@ const milestoneSchema = z.object({
   requiresUrl: z.boolean().default(false),
   requiresText: z.boolean().default(false),
   criteria: z.array(criterionSchema).min(1, "At least one scoring criterion is required"),
-})
+}).refine(
+  (m) => m.requiresGithub || m.requiresUrl || m.requiresText,
+  {
+    message: "At least one submission type must be selected",
+    path: ["requiresGithub"],
+  }
+)
 
 const formSchema = z.object({
   // Step 1: Basic Info
@@ -290,7 +296,7 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
       })
       if (result.success) {
         toast.success("Challenge created successfully!")
-        router.push("/company/dashboard")
+        router.push(`/company/challenges/${result.challengeId}`)
       } else {
         console.error(result.error)
         toast.error("Failed to create challenge: " + result.error)
@@ -785,6 +791,9 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                           <Label htmlFor={`text-${index}`}>Written Report</Label>
                         </div>
                       </div>
+                      {form.formState.errors.milestones?.[index]?.requiresGithub && (
+                        <p className="text-xs text-destructive">{form.formState.errors.milestones[index]?.requiresGithub?.message}</p>
+                      )}
                     </div>
 
                     {/* Scoring Criteria */}

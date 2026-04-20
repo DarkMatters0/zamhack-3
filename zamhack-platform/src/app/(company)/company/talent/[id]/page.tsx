@@ -17,6 +17,7 @@ import {
   Calendar,
   CheckCircle2,
 } from "lucide-react"
+import { RANK_TITLES } from "@/lib/rank-titles"
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
@@ -40,10 +41,10 @@ function avatarGradient(name: string): string {
 }
 
 const LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string; dots: number }> = {
-  beginner:     { label: "Beginner",     color: "#64748B", bg: "rgba(100,116,139,0.10)", dots: 1 },
-  intermediate: { label: "Intermediate", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  dots: 2 },
-  advanced:     { label: "Advanced",     color: "#FF9B87", bg: "rgba(255,155,135,0.12)", dots: 3 },
-  expert:       { label: "Expert",       color: "#2C3E50", bg: "rgba(44,62,80,0.10)",    dots: 4 },
+  beginner:     { label: RANK_TITLES.beginner,     color: "#64748B", bg: "rgba(100,116,139,0.10)", dots: 1 },
+  intermediate: { label: RANK_TITLES.intermediate, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  dots: 2 },
+  advanced:     { label: RANK_TITLES.advanced,     color: "#FF9B87", bg: "rgba(255,155,135,0.12)", dots: 3 },
+  expert:       { label: "Expert",                 color: "#2C3E50", bg: "rgba(44,62,80,0.10)",    dots: 4 },
 }
 
 async function getParticipantProfile(studentId: string) {
