@@ -105,6 +105,12 @@ export async function updateChallenge(
     if (challengeError) throw new Error(challengeError.message);
 
     for (const milestone of data.milestones) {
+      if (!milestone.requires_github && !milestone.requires_url && !milestone.requires_text) {
+        throw new Error(`Milestone "${milestone.title}" must require at least one submission type.`);
+      }
+    }
+
+    for (const milestone of data.milestones) {
       if (milestone.id) {
         await supabase
           .from("milestones")

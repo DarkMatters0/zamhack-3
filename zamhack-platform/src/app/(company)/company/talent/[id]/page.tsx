@@ -17,6 +17,7 @@ import {
   Calendar,
   CheckCircle2,
 } from "lucide-react"
+import { RANK_TITLES } from "@/lib/rank-titles"
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
@@ -40,10 +41,10 @@ function avatarGradient(name: string): string {
 }
 
 const LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string; dots: number }> = {
-  beginner:     { label: "Beginner",     color: "#64748B", bg: "rgba(100,116,139,0.10)", dots: 1 },
-  intermediate: { label: "Intermediate", color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  dots: 2 },
-  advanced:     { label: "Advanced",     color: "#FF9B87", bg: "rgba(255,155,135,0.12)", dots: 3 },
-  expert:       { label: "Expert",       color: "#2C3E50", bg: "rgba(44,62,80,0.10)",    dots: 4 },
+  beginner:     { label: RANK_TITLES.beginner,     color: "#64748B", bg: "rgba(100,116,139,0.10)", dots: 1 },
+  intermediate: { label: RANK_TITLES.intermediate, color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  dots: 2 },
+  advanced:     { label: RANK_TITLES.advanced,     color: "#FF9B87", bg: "rgba(255,155,135,0.12)", dots: 3 },
+  expert:       { label: "Expert",                 color: "#2C3E50", bg: "rgba(44,62,80,0.10)",    dots: 4 },
 }
 
 async function getParticipantProfile(studentId: string) {
@@ -153,6 +154,10 @@ export default async function ParticipantProfilePage({
   const statusBg    = activeCount > 0 ? "rgba(16,185,129,0.12)" : completedCount > 0 ? "rgba(255,155,135,0.12)" : "var(--cp-surface-2)"
   const statusColor = activeCount > 0 ? "#065F46" : completedCount > 0 ? "var(--cp-coral-dark)" : "var(--cp-text-muted)"
 
+  const xpRank   = (profile as any).xp_rank   as string | null
+  const xpPoints = (profile as any).xp_points as number | null
+  const xpCfg    = LEVEL_CONFIG[xpRank || "beginner"] ?? LEVEL_CONFIG.beginner
+
   return (
     <div className="space-y-6 p-6">
 
@@ -218,6 +223,13 @@ export default async function ParticipantProfilePage({
                 <span style={{ fontSize: "0.875rem", color: "var(--cp-text-secondary)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
                   <GraduationCap style={{ width: "0.875rem", height: "0.875rem", color: "var(--cp-coral)", flexShrink: 0 }} />
                   {headline}
+                </span>
+              )}
+              {xpRank && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", fontWeight: 700, padding: "0.2rem 0.625rem", borderRadius: "99px", background: xpCfg.bg, color: xpCfg.color, width: "fit-content" }}>
+                  <Zap style={{ width: "0.75rem", height: "0.75rem" }} />
+                  {xpCfg.label}
+                  {xpPoints != null && ` · ${xpPoints.toLocaleString()} XP`}
                 </span>
               )}
               {location && (
@@ -423,6 +435,8 @@ export default async function ParticipantProfilePage({
                 { label: "Status",     node: <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "0.175rem 0.625rem", borderRadius: "99px", background: statusBg, color: statusColor }}>{statusLabel}</span> },
                 { label: "Challenges", node: <strong style={{ fontSize: "0.875rem", color: "var(--cp-navy)" }}>{totalParticipations} total</strong> },
                 { label: "Skills",     node: <strong style={{ fontSize: "0.875rem", color: "var(--cp-navy)" }}>{studentSkills.length} listed</strong> },
+                ...(xpRank ? [{ label: "XP Rank",   node: <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "0.175rem 0.625rem", borderRadius: "99px", background: xpCfg.bg, color: xpCfg.color }}>{xpCfg.label}</span> }] : []),
+                ...(xpPoints != null ? [{ label: "XP Points", node: <strong style={{ fontSize: "0.875rem", color: "var(--cp-navy)" }}>{xpPoints.toLocaleString()}</strong> }] : []),
                 ...(joinedDate ? [{ label: "Joined", node: <strong style={{ fontSize: "0.8125rem", color: "var(--cp-navy)" }}>{joinedDate}</strong> }] : []),
               ] as { label: string; node: React.ReactNode }[]).map(({ label, node }, i, arr) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0", borderBottom: i < arr.length - 1 ? "1px solid var(--cp-border)" : "none" }}>

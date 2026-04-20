@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Database } from "@/types/supabase"
 import { Users } from "lucide-react"
 import { TalentGrid } from "./talent-grid"
+import { type SkillTier } from "@/lib/rank-titles"
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
@@ -11,6 +12,7 @@ export interface StudentWithStats extends Profile {
   activeChallenges: number
   matchScore?: number
   matchReason?: string
+  highestTier?: SkillTier
 }
 
 const COMPLETED_STATUSES = new Set(["completed", "closed"])
@@ -183,6 +185,7 @@ async function getTalentData(): Promise<TalentData> {
     activeChallenges:    activeMap.get(s.id)    || 0,
     matchScore:          cacheMap.get(s.id)?.score,
     matchReason:         cacheMap.get(s.id)?.reason ?? undefined,
+    highestTier:         ((s as any).xp_rank as SkillTier | undefined) ?? undefined,
   }))
 
   return { students: enrichedStudents, isCacheStale, companyUserId: user.id }

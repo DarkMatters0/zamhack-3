@@ -168,6 +168,12 @@ export const createChallenge = async (
     const challengeId = challenge.id
 
     // Step 3: Insert milestones
+    for (const milestone of input.milestones) {
+      if (!milestone.requiresGithub && !milestone.requiresUrl && !milestone.requiresText) {
+        return { success: false, error: `Milestone "${milestone.title}" must require at least one submission type.` }
+      }
+    }
+
     const milestonesData = input.milestones.map((milestone, index) => ({
       challenge_id: challengeId,
       title: milestone.title,

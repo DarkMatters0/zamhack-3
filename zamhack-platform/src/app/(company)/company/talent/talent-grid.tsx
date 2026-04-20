@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import type { StudentWithStats } from "./page"
 import { MessageModal } from "./message-modal"
+import { getRankTitle } from "@/lib/rank-titles"
 
 interface TalentGridProps {
   initialStudents: StudentWithStats[]
@@ -53,6 +54,15 @@ function avatarGradient(name: string): string {
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length]
+}
+
+const RANK_COLOR: Record<string, {
+  color: string; bg: string;
+  gradient: string; border: string; shadow: string; shadowHover: string; borderHover: string;
+}> = {
+  beginner:     { color: "#64748B", bg: "rgba(100,116,139,0.10)", gradient: "linear-gradient(90deg, #94A3B8, #64748B)", border: "rgba(100,116,139,0.30)", shadow: "0 2px 10px rgba(100,116,139,0.12)", shadowHover: "0 8px 24px rgba(100,116,139,0.22)", borderHover: "#94A3B8" },
+  intermediate: { color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  gradient: "linear-gradient(90deg, #38BDF8, #0EA5E9)", border: "rgba(14,165,233,0.30)",  shadow: "0 2px 10px rgba(14,165,233,0.12)",  shadowHover: "0 8px 24px rgba(14,165,233,0.22)",  borderHover: "#38BDF8"  },
+  advanced:     { color: "#FF9B87", bg: "rgba(255,155,135,0.12)", gradient: "linear-gradient(90deg, #FF9B87, #E8836F)", border: "rgba(255,155,135,0.40)", shadow: "0 2px 10px rgba(255,155,135,0.15)", shadowHover: "0 8px 24px rgba(255,155,135,0.28)", borderHover: "#FF9B87"  },
 }
 
 export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: TalentGridProps) {
@@ -294,16 +304,17 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
               const gradient      = avatarGradient(name)
               const headline      = [student.degree, student.university].filter(Boolean).join(" · ")
               const hasExperience = student.completedChallenges > 0
+              const rc            = RANK_COLOR[student.highestTier ?? "beginner"] ?? RANK_COLOR.beginner
 
               return (
                 <div
                   key={student.id}
                   style={{
-                    background: "white",
-                    border: "2px solid rgba(255,155,135,0.4)",
+                    background: rc.bg,
+                    border: `2px solid ${rc.border}`,
                     borderRadius: "var(--cp-radius-xl, 20px)",
                     overflow: "hidden",
-                    boxShadow: "0 4px 16px rgba(255,155,135,0.15)",
+                    boxShadow: rc.shadow,
                     transition: "all 0.25s ease",
                     display: "flex",
                     flexDirection: "column",
@@ -311,17 +322,17 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                   onMouseEnter={(e) => {
                     const el = e.currentTarget
                     el.style.transform   = "translateY(-3px)"
-                    el.style.boxShadow   = "0 8px 24px rgba(255,155,135,0.25)"
-                    el.style.borderColor = "var(--cp-coral)"
+                    el.style.boxShadow   = rc.shadowHover
+                    el.style.borderColor = rc.borderHover
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget
                     el.style.transform   = "translateY(0)"
-                    el.style.boxShadow   = "0 4px 16px rgba(255,155,135,0.15)"
-                    el.style.borderColor = "rgba(255,155,135,0.4)"
+                    el.style.boxShadow   = rc.shadow
+                    el.style.borderColor = rc.border
                   }}
                 >
-                  <div style={{ height: "4px", background: gradient }} />
+                  <div style={{ height: "6px", background: rc.gradient }} />
                   <div style={{ padding: "1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
                       {student.avatar_url ? (
@@ -365,6 +376,22 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                         )}
                       </div>
                     </div>
+                    {student.highestTier && (() => {
+                      const rc = RANK_COLOR[student.highestTier] ?? RANK_COLOR.beginner
+                      return (
+                        <span style={{
+                          display: "inline-block",
+                          padding: "0.2rem 0.625rem",
+                          borderRadius: "99px",
+                          fontSize: "0.7rem", fontWeight: 700,
+                          background: rc.bg,
+                          color: rc.color,
+                          width: "fit-content",
+                        }}>
+                          {getRankTitle(student.highestTier)}
+                        </span>
+                      )
+                    })()}
                     {student.bio && (
                       <p style={{
                         fontSize: "0.8125rem", color: "var(--cp-text-secondary)",
@@ -431,7 +458,7 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                     borderTop: "1px solid var(--cp-border)",
                     display: "flex",
                     gap: "0.5rem",
-                    background: "var(--cp-background, #fafafa)",
+                    background: "transparent",
                   }}>
                     <Link
                       href={`/company/talent/${student.id}`}
@@ -647,16 +674,17 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
             const gradient      = avatarGradient(name)
             const headline      = [student.degree, student.university].filter(Boolean).join(" · ")
             const hasExperience = student.completedChallenges > 0
+            const rc            = RANK_COLOR[student.highestTier ?? "beginner"] ?? RANK_COLOR.beginner
 
             return (
               <div
                 key={student.id}
                 style={{
-                  background: "white",
-                  border: "1px solid var(--cp-border)",
+                  background: rc.bg,
+                  border: `1px solid ${rc.border}`,
                   borderRadius: "var(--cp-radius-xl, 20px)",
                   overflow: "hidden",
-                  boxShadow: "var(--cp-shadow-sm)",
+                  boxShadow: rc.shadow,
                   transition: "all 0.25s ease",
                   display: "flex",
                   flexDirection: "column",
@@ -664,18 +692,18 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                 onMouseEnter={(e) => {
                   const el = e.currentTarget
                   el.style.transform   = "translateY(-3px)"
-                  el.style.boxShadow   = "var(--cp-shadow-md)"
-                  el.style.borderColor = "rgba(255,155,135,0.35)"
+                  el.style.boxShadow   = rc.shadowHover
+                  el.style.borderColor = rc.borderHover
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget
                   el.style.transform   = "translateY(0)"
-                  el.style.boxShadow   = "var(--cp-shadow-sm)"
-                  el.style.borderColor = "var(--cp-border)"
+                  el.style.boxShadow   = rc.shadow
+                  el.style.borderColor = rc.border
                 }}
               >
                 {/* Accent strip */}
-                <div style={{ height: "4px", background: gradient }} />
+                <div style={{ height: "6px", background: rc.gradient }} />
 
                 {/* Body */}
                 <div style={{ padding: "1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -724,6 +752,24 @@ export function TalentGrid({ initialStudents, isCacheStale, companyUserId }: Tal
                       )}
                     </div>
                   </div>
+
+                  {/* Rank title */}
+                  {student.highestTier && (() => {
+                    const rc = RANK_COLOR[student.highestTier] ?? RANK_COLOR.beginner
+                    return (
+                      <span style={{
+                        display: "inline-block",
+                        padding: "0.2rem 0.625rem",
+                        borderRadius: "99px",
+                        fontSize: "0.7rem", fontWeight: 700,
+                        background: rc.bg,
+                        color: rc.color,
+                        width: "fit-content",
+                      }}>
+                        {getRankTitle(student.highestTier)}
+                      </span>
+                    )
+                  })()}
 
                   {/* Bio */}
                   {student.bio && (

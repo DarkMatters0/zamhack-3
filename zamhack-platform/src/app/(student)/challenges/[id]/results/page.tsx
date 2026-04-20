@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { Database } from "@/types/supabase"
+import { getRankTitle, type SkillTier } from "@/lib/rank-titles"
 import { redirect } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -16,14 +17,15 @@ import { getTiedParticipantDetails } from "@/app/challenges/actions"
 interface WinnerData {
   rank: number
   prize: string | null
-  score: number | null  // ← reads stored score directly from winners table
-  profile_id: string    // needed to match with participant scores
+  score: number | null
+  profile_id: string
   is_tied: boolean | null
   profile: {
     first_name: string | null
     last_name: string | null
     avatar_url: string | null
     university: string | null
+    xp_rank: string | null
   } | null
 }
 
@@ -79,12 +81,21 @@ export default async function ChallengeResultsPage({
       score,
       profile_id,
       is_tied,
-      profile:profiles!winners_profile_id_fkey (first_name, last_name, avatar_url, university)
+      profile:profiles!winners_profile_id_fkey (first_name, last_name, avatar_url, university, xp_rank)
     `)
     .eq("challenge_id", id)
     .order("rank", { ascending: true })
 
   const winners = data as unknown as WinnerData[] | null
+
+  // Build XP rank map from the already-fetched profile data
+  const tierMap = new Map<string, SkillTier>()
+  for (const w of winners ?? []) {
+    const xpRank = w.profile?.xp_rank
+    if (xpRank && (xpRank === "beginner" || xpRank === "intermediate" || xpRank === "advanced")) {
+      tierMap.set(w.profile_id, xpRank as SkillTier)
+    }
+  }
 
   // Tie detection
   const hasTies = (winners ?? []).some(w => (w as any).is_tied === true)
@@ -351,6 +362,11 @@ export default async function ChallengeResultsPage({
                   <h3 className="font-bold text-lg text-center leading-tight">
                     {profile?.first_name} {profile?.last_name}
                   </h3>
+                  {tierMap.get(winner.profile_id) && (
+                    <span className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {getRankTitle(tierMap.get(winner.profile_id)!)}
+                    </span>
+                  )}
                   <p className="text-sm text-muted-foreground text-center mt-1">
                     {profile?.university}
                   </p>
@@ -400,6 +416,9 @@ export default async function ChallengeResultsPage({
                       </th>
                       <th className="text-left font-semibold text-muted-foreground px-4 py-3">
                         Participant
+                      </th>
+                      <th className="text-left font-semibold text-muted-foreground px-4 py-3 hidden sm:table-cell">
+                        Title
                       </th>
                       <th className="text-left font-semibold text-muted-foreground px-4 py-3 hidden sm:table-cell">
                         University
@@ -456,6 +475,17 @@ export default async function ChallengeResultsPage({
                                 {w.profile?.first_name} {w.profile?.last_name}
                               </span>
                             </div>
+                          </td>
+
+                          {/* Rank title */}
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            {tierMap.get(w.profile_id) ? (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary whitespace-nowrap">
+                                {getRankTitle(tierMap.get(w.profile_id)!)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </td>
 
                           {/* University */}

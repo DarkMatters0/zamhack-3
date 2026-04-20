@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/utils/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 
 export async function toggleUserStatus(userId: string, currentStatus: string | null) {
@@ -8,8 +9,7 @@ export async function toggleUserStatus(userId: string, currentStatus: string | n
 
   // 1. Fetch User
   const { data: { user } } = await supabase.auth.getUser()
-  
-  // FIX: Explicitly handle the 'null' user case so TypeScript knows 'user' exists below
+
   if (!user) {
     return { error: "Not authenticated" }
   }
@@ -18,7 +18,7 @@ export async function toggleUserStatus(userId: string, currentStatus: string | n
   const { data: currentUserProfile } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", user.id) // FIX: Removed '?' because we checked (!user) above
+    .eq("id", user.id)
     .single()
 
   if (currentUserProfile?.role !== "admin") {
@@ -27,14 +27,27 @@ export async function toggleUserStatus(userId: string, currentStatus: string | n
 
   const newStatus = currentStatus === "active" ? "disabled" : "active"
 
-  // 3. Update Status
+  // 3. Update profile status
   const { error } = await supabase
     .from("profiles")
-    // FIX: Cast as any because 'status' column is not in your types/supabase.ts file yet
     .update({ status: newStatus } as any)
     .eq("id", userId)
 
   if (error) return { error: error.message }
+
+  // 4. Sync with Supabase Auth so the ban actually blocks login
+  const serviceClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  const banDuration = newStatus === "disabled" ? "87600h" : "none"
+  const { error: authError } = await serviceClient.auth.admin.updateUserById(userId, {
+    ban_duration: banDuration,
+  })
+
+  if (authError) return { error: `Profile updated but auth ban failed: ${authError.message}` }
 
   revalidatePath("/admin/users")
   return { success: `User ${newStatus === "active" ? "enabled" : "disabled"} successfully` }

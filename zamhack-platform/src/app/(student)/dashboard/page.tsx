@@ -13,6 +13,7 @@ import {
   BookOpen,
   ShieldAlert,
 } from "lucide-react"
+import { getRankTitle, type SkillTier } from "@/lib/rank-titles"
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -480,7 +481,7 @@ export default async function StudentDashboardPage() {
           </div>
           <p className="stat-value" style={{ fontSize: "1.625rem" }}>{xpPoints.toLocaleString()}</p>
           <p style={{ fontSize: "0.65rem", textTransform: "capitalize" }}>
-            <span style={{ color: "#9ca3af" }}>{xpRank} rank · </span>
+            <span style={{ color: "#9ca3af" }}>{getRankTitle(xpRank as SkillTier)} · </span>
             <Link href="/profile" style={{ color: "#eab308", textDecoration: "none", fontWeight: 600 }}>
               How to earn →
             </Link>

@@ -7,6 +7,7 @@ import { GradingForm } from "@/components/challenges/grading-form"
 import { Database } from "@/types/supabase"
 import Link from "next/link"
 import { ExternalLink, Github, Globe, Bot } from "lucide-react"
+import { getRankTitle, type SkillTier } from "@/lib/rank-titles"
 
 type Submission = Database["public"]["Tables"]["submissions"]["Row"]
 type Milestone = Database["public"]["Tables"]["milestones"]["Row"]
@@ -193,6 +194,7 @@ async function getSubmissionReviewData(
   }
 }
 
+
 const getInitials = (firstName: string | null, lastName: string | null): string => {
   const first = firstName?.charAt(0).toUpperCase() || ""
   const last = lastName?.charAt(0).toUpperCase() || ""
@@ -225,6 +227,12 @@ export default async function SubmissionReviewPage({
   }
 
   const { submission, milestone, challenge, profile, evaluation, rubrics, scores, aiEvaluation } = data
+
+  const xpRankRaw = (data.profile as any)?.xp_rank as string | undefined
+  const submitterTier: SkillTier | null =
+    xpRankRaw === "beginner" || xpRankRaw === "intermediate" || xpRankRaw === "advanced"
+      ? xpRankRaw
+      : null
 
   const scoringMode = (challenge as any)?.scoring_mode ?? 'company_only'
   const showAiFeedback = (scoringMode === 'company_only' || scoringMode === 'average') && aiEvaluation !== null
@@ -265,7 +273,14 @@ export default async function SubmissionReviewPage({
                   )}
                 </div>
                 <div>
-                  <CardTitle>{fullName}</CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle>{fullName}</CardTitle>
+                    {submitterTier && (
+                      <Badge variant="secondary" className="text-xs font-semibold">
+                        {getRankTitle(submitterTier)}
+                      </Badge>
+                    )}
+                  </div>
                   {profile?.university && (
                     <p className="text-sm text-muted-foreground mt-1">
                       {profile.university}

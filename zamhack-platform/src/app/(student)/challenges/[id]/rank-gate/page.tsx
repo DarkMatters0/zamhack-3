@@ -3,11 +3,12 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Lock, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { RANK_TITLES } from "@/lib/rank-titles"
 
 const RANK_LABEL: Record<string, string> = {
-  beginner: "Beginner",
-  intermediate: "Intermediate",
-  advanced: "Advanced",
+  beginner:     RANK_TITLES.beginner,
+  intermediate: RANK_TITLES.intermediate,
+  advanced:     RANK_TITLES.advanced,
 }
 
 // XP required to ENTER a rank (i.e. first point in that band)
