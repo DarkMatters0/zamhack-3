@@ -172,8 +172,8 @@ export default async function ChallengeResultsPage({
           iconColor: "text-yellow-500",
           icon: Trophy,
           badgeBg: "bg-black/90 text-white hover:bg-black/80",
-          heightClass: "md:min-h-[22rem]",
-          scale: "scale-105 z-10",
+          heightClass: "md:min-h-[26rem]",
+          scale: "z-10 ring-2 ring-yellow-200",
           scoreColor: "text-yellow-700",
         }
       case 2:
@@ -183,8 +183,8 @@ export default async function ChallengeResultsPage({
           iconColor: "text-slate-400",
           icon: Medal,
           badgeBg: "bg-black/90 text-white hover:bg-black/80",
-          heightClass: "md:min-h-[19rem]",
-          scale: "scale-100",
+          heightClass: "md:min-h-[23rem]",
+          scale: "scale-100 z-10",
           scoreColor: "text-slate-600",
         }
       case 3:
@@ -194,7 +194,7 @@ export default async function ChallengeResultsPage({
           iconColor: "text-amber-600",
           icon: Award,
           badgeBg: "bg-black/90 text-white hover:bg-black/80",
-          heightClass: "md:min-h-[17rem]",
+          heightClass: "md:min-h-[20rem]",
           scale: "scale-100",
           scoreColor: "text-amber-700",
         }
