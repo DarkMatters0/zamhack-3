@@ -75,6 +75,7 @@ const [milestonesResult, submissionsResult] = await Promise.all([
 // Count milestones per challenge
 const milestoneCountMap = new Map<string, number>()
 for (const m of milestonesResult.data ?? []) {
+  if (!m.challenge_id) continue
   milestoneCountMap.set(m.challenge_id, (milestoneCountMap.get(m.challenge_id) ?? 0) + 1)
 }
 
