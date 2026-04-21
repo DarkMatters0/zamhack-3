@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
@@ -53,6 +54,9 @@ interface ChallengeProgressData {
   studentName: string
   gateStatus: GateResult
   challengeSkills: Array<{ skill_id: string; skill: { id: string; name: string } | null }>
+  representativeName: string | null
+  signatureUrl: string | null
+  verifyUrl: string | null
 }
 
 type MilestoneStatus = "completed" | "in_progress" | "locked"
@@ -117,6 +121,8 @@ async function getChallengeData(
           .from("evaluations")
           .select("*")
           .in("submission_id", submissionIds)
+          .eq("is_draft", false)
+          .not("reviewer_id", "is", null)
         if (evals) evaluations = evals
       }
     }
@@ -161,6 +167,25 @@ async function getChallengeData(
     .select("skill_id, skill:skills(id, name)")
     .eq("challenge_id", id) as any)
 
+  // 10. Certificate org data (for perpetual challenge certificate footer)
+  const org = (challenge as any).organization as {
+    representative_name?: string | null
+    signature_url?: string | null
+  } | null
+  const representativeName = org?.representative_name ?? null
+  let signatureUrl: string | null = null
+  if (org?.signature_url) {
+    const admin = createAdminClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data: signedData } = await admin.storage
+      .from("signatures")
+      .createSignedUrl(org.signature_url, 300)
+    signatureUrl = signedData?.signedUrl ?? null
+  }
+  const verifyUrl = `zamhack.vercel.app/participants/${user.id}/achievement/${id}?type=completion`
+
   return {
     challenge: challenge as any,
     milestones: milestones || [],
@@ -173,6 +198,9 @@ async function getChallengeData(
     studentName,
     gateStatus,
     challengeSkills: (challengeSkillsRaw as any) ?? [],
+    representativeName,
+    signatureUrl,
+    verifyUrl,
   }
 }
 
@@ -234,6 +262,9 @@ export default async function ChallengePage({
     studentName,
     gateStatus,
     challengeSkills,
+    representativeName,
+    signatureUrl,
+    verifyUrl,
   } = data
 
   // --- Logic ---
@@ -429,6 +460,9 @@ export default async function ChallengePage({
                     organizationName={orgName}
                     completionDate={completionDate}
                     totalScore={null}
+                    representativeName={representativeName}
+                    signatureUrl={signatureUrl}
+                    verifyUrl={verifyUrl}
                   />
                 ) : isEnded && isPerpetual ? (
                   /* CASE 2: Perpetual + closed + student didn't finish */

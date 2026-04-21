@@ -16,6 +16,9 @@ type CompletionProps = {
   organizationName: string
   completionDate: string
   totalScore?: number | null
+  representativeName?: string | null
+  signatureUrl?: string | null
+  verifyUrl?: string | null
 }
 
 type WinnerProps = {
@@ -145,6 +148,9 @@ export default function DownloadCertificateButton(props: Props) {
                   organizationName={props.organizationName}
                   completionDate={props.completionDate}
                   totalScore={props.totalScore}
+                  representativeName={props.representativeName}
+                  signatureUrl={props.signatureUrl}
+                  verifyUrl={props.verifyUrl}
                 />
               ) : (
                 <WinnerCertificate
