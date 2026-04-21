@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -70,6 +70,7 @@ function SimpleGradingForm({
   initialEvaluation?: Evaluation | null
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const form = useForm<SimpleGradingFormValues>({
     resolver: zodResolver(simpleGradingSchema),
@@ -81,6 +82,8 @@ function SimpleGradingForm({
   })
 
   const onSubmit = async (data: SimpleGradingFormValues, isDraftOverride?: boolean) => {
+    if (isSubmittingRef.current) return
+    isSubmittingRef.current = true
     setIsSubmitting(true)
     try {
       const finalIsDraft = isDraftOverride !== undefined ? isDraftOverride : data.isDraft
@@ -104,6 +107,7 @@ function SimpleGradingForm({
       console.error(error)
       toast.error("An unexpected error occurred")
     } finally {
+      isSubmittingRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -199,6 +203,7 @@ export const GradingForm = ({
   initialEvaluation,
 }: GradingFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const defaultRubricScores = rubrics.map(rubric => {
     const existing = existingScores.find(s => s.rubric_id === rubric.id)
@@ -229,6 +234,8 @@ export const GradingForm = ({
   const maxTotal = rubrics.reduce((sum, r) => sum + (r.max_points || 10), 0)
 
   const onSubmit = async (data: GradingFormValues, isDraftOverride?: boolean) => {
+    if (isSubmittingRef.current) return
+    isSubmittingRef.current = true
     setIsSubmitting(true)
     try {
       const finalIsDraft = isDraftOverride !== undefined ? isDraftOverride : data.isDraft
@@ -250,6 +257,7 @@ export const GradingForm = ({
       console.error(error)
       toast.error("An unexpected error occurred")
     } finally {
+      isSubmittingRef.current = false
       setIsSubmitting(false)
     }
   }

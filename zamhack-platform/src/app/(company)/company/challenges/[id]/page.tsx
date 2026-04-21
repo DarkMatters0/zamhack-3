@@ -25,6 +25,7 @@ export interface RankingBreakdownResult {
   rankedParticipants: RankedParticipantWithBreakdown[]
   evaluatorList: Array<{ evaluatorId: string; evaluatorName: string; isChief: boolean }>
   participantNames: Map<string, string>   // participantId (user_id) → display name
+  companyScores: Map<string, number | null>  // userId → company evaluation score
   scoringMode: string
   isRankedMode: boolean
 }
@@ -102,21 +103,12 @@ async function getRankingBreakdownData(challengeId: string): Promise<RankingBrea
 
   const evaluatorCount = evaluatorRowList.length
 
-  // c. Check shouldUseRankedMode — early return if not applicable
+  // c. Determine ranked mode (computed early; data fetch happens before early return
+  //    so companyScores are available for the simple display path too)
   const isRankedMode = shouldUseRankedMode({
     scoringMode: scoringMode as "company_only" | "evaluator_only" | "average",
     evaluatorCount,
   })
-
-  if (!isRankedMode) {
-    return {
-      rankedParticipants: [],
-      evaluatorList,
-      participantNames: new Map(),
-      scoringMode,
-      isRankedMode: false,
-    }
-  }
 
   // d. Fetch active participants with profile join
   const { data: participantRows } = await (supabase
@@ -191,6 +183,18 @@ async function getRankingBreakdownData(challengeId: string): Promise<RankingBrea
     }
   }
 
+  // Early return for non-ranked mode — include companyScores for simple score display
+  if (!isRankedMode) {
+    return {
+      rankedParticipants: [],
+      evaluatorList,
+      participantNames,
+      companyScores,
+      scoringMode,
+      isRankedMode: false,
+    }
+  }
+
   // h. Call computeRankedResultsWithBreakdown
   const rankedParticipants = computeRankedResultsWithBreakdown({
     evaluatorScores,
@@ -204,6 +208,7 @@ async function getRankingBreakdownData(challengeId: string): Promise<RankingBrea
     rankedParticipants,
     evaluatorList,
     participantNames,
+    companyScores,
     scoringMode,
     isRankedMode: true,
   }
@@ -737,6 +742,7 @@ export default async function ChallengeManagementPage({
               rankedParticipants={rankingData.rankedParticipants}
               evaluatorList={rankingData.evaluatorList}
               participantNames={Object.fromEntries(rankingData.participantNames)}
+              companyScores={Object.fromEntries(rankingData.companyScores)}
               scoringMode={rankingData.scoringMode}
               isRankedMode={rankingData.isRankedMode}
             />

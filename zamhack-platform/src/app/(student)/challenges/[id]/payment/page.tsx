@@ -118,6 +118,12 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
             </div>
           </div>
 
+          {/* GCash / Maya mobile number note */}
+          <p className="text-xs text-muted-foreground text-center px-1">
+            <span className="font-medium">GCash and PayMaya</span> require a registered
+            mobile number. Make sure your e-wallet is active before proceeding.
+          </p>
+
           {/* Error */}
           {error && (
             <Alert variant="destructive">

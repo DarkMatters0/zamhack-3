@@ -10,6 +10,7 @@ interface RankingBreakdownProps {
   rankedParticipants: RankedParticipantWithBreakdown[]
   evaluatorList: Array<{ evaluatorId: string; evaluatorName: string; isChief: boolean }>
   participantNames: Record<string, string>
+  companyScores: Record<string, number | null>
   scoringMode: string
   isRankedMode: boolean
 }
@@ -193,9 +194,21 @@ export function RankingBreakdown({
   rankedParticipants,
   evaluatorList,
   participantNames,
+  companyScores,
   scoringMode,
   isRankedMode,
 }: RankingBreakdownProps) {
+  // Build sorted rows for the simple company-score display (non-ranked mode)
+  const simpleScoreRows = (() => {
+    const scored = Object.entries(companyScores)
+      .filter((entry): entry is [string, number] => entry[1] !== null)
+      .sort(([, a], [, b]) => b - a)
+    return scored.map(([userId, score]) => {
+      const rank = scored.filter(([, s]) => s > score).length + 1
+      const isTied = scored.filter(([, s]) => s === score).length > 1
+      return { userId, score, rank, isTied }
+    })
+  })()
   // Scoring method banner config
   const bannerConfig = (() => {
     if (scoringMode === "evaluator_only") {
@@ -226,15 +239,52 @@ export function RankingBreakdown({
         <p className="text-sm text-muted-foreground">{bannerConfig.text}</p>
       </div>
 
-      {/* B — Non-ranked mode fallback */}
+      {/* B — Simple company score table (non-ranked mode) */}
       {!isRankedMode && (
-        <div className="rounded-lg border border-border bg-card px-4 py-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Score breakdown is only available when multiple evaluators are assigned
-            and scoring mode is <span className="font-medium">Evaluator Only</span> or{" "}
-            <span className="font-medium">Average</span>.
-          </p>
-        </div>
+        simpleScoreRows.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              No evaluations submitted yet. Rankings will appear once participants are scored.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b">
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">Rank</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Participant</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {simpleScoreRows.map(({ userId, score, rank, isTied }) => (
+                  <tr key={userId} className="border-b last:border-0 hover:bg-muted/20">
+                    <td className="px-4 py-3">
+                      <RankBadge rank={rank} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium" style={{ color: "var(--cp-navy)" }}>
+                        {participantNames[userId] ?? userId}
+                      </span>
+                      {isTied && (
+                        <Badge
+                          variant="outline"
+                          className="ml-2 text-yellow-700 border-yellow-400 bg-yellow-50 text-xs"
+                        >
+                          ⚠ Tied
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                      {score != null ? score.toFixed(1) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
 
       {/* C — Per-participant expandable cards */}
