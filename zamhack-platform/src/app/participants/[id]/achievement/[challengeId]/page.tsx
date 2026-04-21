@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { Database } from "@/types/supabase"
 import { notFound } from "next/navigation"
@@ -65,15 +66,106 @@ export default async function CertificateVerifyPage({
     .eq("challenge_id", challengeId)
     .single()
 
-  if (!winnerRow) notFound()
+  const studentName =
+    `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || "Student"
 
-  const winner = winnerRow as unknown as WinnerRow
-  const challenge = winner.challenge
-  const org = challenge?.organization
+  // ── NORMAL CHALLENGE PATH (winner row exists) ────────────────────────────
+  if (winnerRow) {
+    const winner = winnerRow as unknown as WinnerRow
+    const challenge = winner.challenge
+    const org = challenge?.organization
 
-  if (!challenge) notFound()
+    if (!challenge) notFound()
 
-  // Generate a signed URL for the signature image (1 hour expiry)
+    let signatureUrl: string | null = null
+    if (org?.signature_url) {
+      const { data: signedData } = await supabase.storage
+        .from("signatures")
+        .createSignedUrl(org.signature_url, 3600)
+      signatureUrl = signedData?.signedUrl ?? null
+    }
+
+    const completionDate = winner.announced_at
+      ? new Date(winner.announced_at).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+
+    const rank = winner.rank
+    const isWinner = type === "completion" ? false
+      : type === "winner" ? (rank >= 1 && rank <= 3)
+      : (rank >= 1 && rank <= 3)
+    const verifyUrl = `zamhack.vercel.app/participants/${id}/achievement/${challengeId}${type ? `?type=${type}` : ""}`
+
+    return (
+      <VerifyPageShell studentName={studentName} challengeTitle={challenge.title}>
+        <CertificateDisplay
+          type={isWinner ? "winner" : "completion"}
+          rank={isWinner ? (rank as 1 | 2 | 3) : undefined}
+          studentName={studentName}
+          challengeTitle={challenge.title}
+          organizationName={org?.name ?? "ZamHack"}
+          completionDate={completionDate}
+          totalScore={winner.score}
+          representativeName={org?.representative_name ?? null}
+          signatureUrl={signatureUrl}
+          verifyUrl={verifyUrl}
+        />
+      </VerifyPageShell>
+    )
+  }
+
+  // ── PERPETUAL CHALLENGE FALLBACK ─────────────────────────────────────────
+  // No winner row — check if this is a completed perpetual challenge.
+  const { data: challenge } = await (supabase
+    .from("challenges")
+    .select("title, is_perpetual, organization:organizations(name, representative_name, signature_url)")
+    .eq("id", challengeId)
+    .single() as any)
+
+  if (!challenge || !(challenge as any).is_perpetual) notFound()
+
+  // Confirm the student actually participated
+  const { data: participant } = await supabase
+    .from("challenge_participants")
+    .select("id")
+    .eq("challenge_id", challengeId)
+    .eq("user_id", id)
+    .maybeSingle()
+
+  if (!participant) notFound()
+
+  // Fetch milestone IDs for this challenge
+  const { data: milestones, count: totalMilestones } = await supabase
+    .from("milestones")
+    .select("id", { count: "exact" })
+    .eq("challenge_id", challengeId)
+
+  if (!totalMilestones || totalMilestones === 0) notFound()
+
+  const milestoneIds = (milestones ?? []).map((m) => m.id)
+
+  // Confirm all milestones have been submitted
+  const { data: submissions, count: submittedCount } = await supabase
+    .from("submissions")
+    .select("submitted_at", { count: "exact" })
+    .eq("participant_id", participant!.id)
+    .in("milestone_id", milestoneIds)
+
+  if (!submittedCount || submittedCount < totalMilestones!) notFound()
+
+  const org = (challenge as any).organization as {
+    name: string
+    representative_name: string | null
+    signature_url: string | null
+  } | null
+
   let signatureUrl: string | null = null
   if (org?.signature_url) {
     const { data: signedData } = await supabase.storage
@@ -82,11 +174,15 @@ export default async function CertificateVerifyPage({
     signatureUrl = signedData?.signedUrl ?? null
   }
 
-  const studentName =
-    `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || "Student"
+  // Use the latest submission date as completion date
+  const latestSubmission = (submissions ?? [])
+    .map((s) => s.submitted_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1)
 
-  const completionDate = winner.announced_at
-    ? new Date(winner.announced_at).toLocaleDateString("en-US", {
+  const completionDate = latestSubmission
+    ? new Date(latestSubmission).toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -97,14 +193,35 @@ export default async function CertificateVerifyPage({
         day: "numeric",
       })
 
-  const rank = winner.rank
-  // If the certificate carry a ?type= param, honour it so the correct cert is shown.
-  // Falls back to rank-based logic for old links that predate the param.
-  const isWinner = type === "completion" ? false
-    : type === "winner" ? (rank >= 1 && rank <= 3)
-    : (rank >= 1 && rank <= 3)
-  const verifyUrl = `zamhack.vercel.app/participants/${id}/achievement/${challengeId}${type ? `?type=${type}` : ""}`
+  const verifyUrl = `zamhack.vercel.app/participants/${id}/achievement/${challengeId}?type=completion`
 
+  return (
+    <VerifyPageShell studentName={studentName} challengeTitle={(challenge as any).title}>
+      <CertificateDisplay
+        type="completion"
+        studentName={studentName}
+        challengeTitle={(challenge as any).title}
+        organizationName={org?.name ?? "ZamHack"}
+        completionDate={completionDate}
+        totalScore={null}
+        representativeName={org?.representative_name ?? null}
+        signatureUrl={signatureUrl}
+        verifyUrl={verifyUrl}
+      />
+    </VerifyPageShell>
+  )
+}
+
+// ── Shared page shell ────────────────────────────────────────────────────────
+function VerifyPageShell({
+  studentName,
+  challengeTitle,
+  children,
+}: {
+  studentName: string
+  challengeTitle: string
+  children: ReactNode
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-16">
       <div className="container max-w-4xl mx-auto py-10 px-4 space-y-6">
@@ -119,25 +236,14 @@ export default async function CertificateVerifyPage({
             <p className="text-xs text-green-700 mt-0.5">
               This page confirms that the certificate below was legitimately generated
               by the ZamHack platform for <strong>{studentName}</strong> upon completing{" "}
-              <strong>{challenge.title}</strong>. It has not been falsified.
+              <strong>{challengeTitle}</strong>. It has not been falsified.
             </p>
           </div>
         </div>
 
         {/* Certificate rendered as HTML */}
         <div className="rounded-xl border shadow-sm overflow-hidden bg-white">
-          <CertificateDisplay
-            type={isWinner ? "winner" : "completion"}
-            rank={isWinner ? (rank as 1 | 2 | 3) : undefined}
-            studentName={studentName}
-            challengeTitle={challenge.title}
-            organizationName={org?.name ?? "ZamHack"}
-            completionDate={completionDate}
-            totalScore={winner.score}
-            representativeName={org?.representative_name ?? null}
-            signatureUrl={signatureUrl}
-            verifyUrl={verifyUrl}
-          />
+          {children}
         </div>
 
         {/* Footer */}
