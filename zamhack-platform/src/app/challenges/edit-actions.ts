@@ -25,7 +25,7 @@ export type UpdateChallengeInput = {
   industries: string[];
   difficulty: Enums<"proficiency_level">;
   status: Enums<"challenge_status">;
-  participation_type: "solo" | "team" | "both";
+  participation_type: "solo";
   max_participants: number;
   max_teams: number;
   max_team_size: number;

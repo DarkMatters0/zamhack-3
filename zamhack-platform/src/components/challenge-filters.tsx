@@ -186,9 +186,8 @@ const toggleIndustry = (industry: string) => {
         <Select value={participationType} onValueChange={(val) => { setParticipationType(val); handleFilterChange("participation_type", val) }}>
           <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Solo & Team</SelectItem>
+            <SelectItem value="all">All</SelectItem>
             <SelectItem value="solo">👤 Solo</SelectItem>
-            <SelectItem value="team" disabled>👥 Team (Coming Soon)</SelectItem>
           </SelectContent>
         </Select>
 

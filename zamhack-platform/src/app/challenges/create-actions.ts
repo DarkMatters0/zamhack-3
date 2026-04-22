@@ -28,7 +28,7 @@ interface CreateChallengeInput {
   industries: string[]
 
   difficulty: ProficiencyLevel
-  participationType: "solo" | "team" | "both"
+  participationType: "solo"
   maxParticipants?: number
   maxTeams?: number
   maxTeamSize?: number

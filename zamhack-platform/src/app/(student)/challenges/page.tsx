@@ -59,8 +59,6 @@ async function getChallenges(searchParams: {
   // 4. Participation Type
   if (searchParams.participation_type === "solo") {
     query = query.or("participation_type.eq.solo,participation_type.eq.both")
-  } else if (searchParams.participation_type === "team") {
-    query = query.or("participation_type.eq.team,participation_type.eq.both")
   }
 
   // 5. Entry Type

@@ -54,7 +54,7 @@ const formSchema = z.object({
   industries: z.array(z.string()).min(1, "Select at least one industry"),
 
   difficulty: z.enum(["beginner", "intermediate", "advanced"]),
-  participationType: z.enum(["solo", "team", "both"]),
+  participationType: z.literal("solo"),
   maxParticipants: z.union([z.string(), z.number()]).optional(),
   maxTeams: z.union([z.string(), z.number()]).optional(),
   maxTeamSize: z.union([z.string(), z.number()]).optional(),
@@ -130,7 +130,7 @@ const INDUSTRIES = [
   "Other",
 ]
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"]
-const TYPES = ["solo", "team", "both"]
+const TYPES = ["solo"]
 const CURRENCIES = ["PHP", "USD", "EUR", "GBP"]
 const STEPS = ["Basic Info", "Timeline", "Milestones", "Skills", "Review"]
 
@@ -456,8 +456,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="solo">Solo</SelectItem>
-                        <SelectItem value="team">Team</SelectItem>
-                        <SelectItem value="both">Both</SelectItem>
                       </SelectContent>
                     </Select>
                     {form.formState.errors.participationType && <p className="text-xs text-destructive">{form.formState.errors.participationType.message}</p>}
@@ -476,30 +474,6 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                       min={1}
                     />
                   </div>
-                  {(watchedValues.participationType === "team" || watchedValues.participationType === "both") && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Max Teams</Label>
-                        <Input
-                          {...form.register("maxTeams")}
-                          title="Max Teams"
-                          type="number"
-                          placeholder="20"
-                          min={1}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Max Team Size</Label>
-                        <Input
-                          {...form.register("maxTeamSize")}
-                          title="Max Team Size"
-                          type="number"
-                          placeholder="4"
-                          min={2}
-                        />
-                      </div>
-                    </>
-                  )}
                 </div>
 
                 {/* ── LOCATION ── */}

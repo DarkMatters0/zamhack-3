@@ -12,7 +12,7 @@ import { Constants } from "@/types/supabase";
 const STATUSES = Constants.public.Enums.challenge_status;
 const DIFFICULTIES = Constants.public.Enums.proficiency_level;
 const INDUSTRIES = ["Technology", "Finance", "Healthcare", "Education", "E-commerce", "Other"] as const;
-const PARTICIPATION_TYPES = ["solo", "team", "both"] as const;
+const PARTICIPATION_TYPES = ["solo"] as const;
 
 export default function EditChallengeForm({
   challenge,
