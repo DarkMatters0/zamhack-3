@@ -25,7 +25,7 @@ export async function createTeam(name: string) {
   const supabase = await createClient()
 
   const { data: authData } = await supabase.auth.getUser()
-  const user = authData.user
+  const user = authData!.user
 
   if (!user) {
     return { error: "You must be logged in to create a team" }
@@ -83,7 +83,7 @@ export async function joinTeam(code: string) {
   const supabase = await createClient()
 
   const { data: authData } = await supabase.auth.getUser()
-  const user = authData.user
+  const user = authData!.user
 
   if (!user) {
     return { error: "You must be logged in to join a team" }
@@ -114,7 +114,7 @@ export async function joinTeam(code: string) {
     .select("*", { count: "exact", head: true })
     .eq("team_id", team!.id)
 
-  if (count && count >= MAX_TEAM_SIZE) {
+  if ((count ?? 0) >= MAX_TEAM_SIZE) {
     return { error: "This team is full (max 4 members)" }
   }
 
@@ -150,11 +150,11 @@ export async function leaveTeam() {
   const { data: teamMember, error: memberError } = await supabase
     .from("team_members")
     .select("team_id")
-    .eq("profile_id", user.id)
+    .eq("profile_id", user!.id)
     .single()
 
   // FIX: Extract ID to variable and check explicitly
-  const teamId = teamMember?.team_id
+  const teamId = teamMember!.team_id
 
   if (memberError || !teamMember || !teamId) {
     return { error: "You are not in a team" }
@@ -166,17 +166,17 @@ export async function leaveTeam() {
     .eq("id", teamId) // Now safe to use
     .single()
 
-  if (team && team.leader_id === user.id) {
+  if (team && team!.leader_id === user!.id) {
     return { error: "Team leaders cannot leave. You must delete the team or transfer leadership." }
   }
 
   const { error: leaveError } = await supabase
     .from("team_members")
     .delete()
-    .eq("profile_id", user.id)
+    .eq("profile_id", user!.id)
 
   if (leaveError) {
-    return { error: leaveError?.message ?? "Failed to leave team" }
+    return { error: leaveError!.message ?? "Failed to leave team" }
   }
 
   revalidatePath("/team")
@@ -197,11 +197,11 @@ export async function deleteTeam() {
   const { data: teamMember, error: memberError } = await supabase
     .from("team_members")
     .select("team_id")
-    .eq("profile_id", user.id)
+    .eq("profile_id", user!.id)
     .single()
 
   // FIX: Extract ID to variable and check explicitly
-  const teamId = teamMember?.team_id
+  const teamId = teamMember!.team_id
 
   if (memberError || !teamMember || !teamId) {
     return { error: "You are not in a team" }
@@ -217,14 +217,14 @@ export async function deleteTeam() {
     return { error: "Team not found" }
   }
 
-  if (team.leader_id !== user.id) {
+  if (team!.leader_id !== user!.id) {
     return { error: "Only the team leader can delete the team" }
   }
 
   const { error: membersError } = await supabase
     .from("team_members")
     .delete()
-    .eq("team_id", team.id)
+    .eq("team_id", team!.id)
 
   if (membersError) {
     return { error: "Failed to remove team members" }
@@ -233,10 +233,10 @@ export async function deleteTeam() {
   const { error: deleteError } = await supabase
     .from("teams")
     .delete()
-    .eq("id", team.id)
+    .eq("id", team!.id)
 
   if (deleteError) {
-    return { error: deleteError?.message ?? "Failed to delete team" }
+    return { error: deleteError!.message ?? "Failed to delete team" }
   }
 
   revalidatePath("/team")
