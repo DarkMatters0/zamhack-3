@@ -1,6 +1,21 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.activity_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  log_type text NOT NULL CHECK (log_type = ANY (ARRAY['admin'::text, 'company'::text])),
+  actor_id uuid NOT NULL,
+  organization_id uuid,
+  action text NOT NULL,
+  entity_type text,
+  entity_id uuid,
+  entity_label text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT activity_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT activity_logs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.profiles(id),
+  CONSTRAINT activity_logs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
 CREATE TABLE public.challenge_evaluators (
   challenge_id uuid NOT NULL,
   evaluator_id uuid NOT NULL,
@@ -73,6 +88,7 @@ CREATE TABLE public.challenges (
   location_details text,
   is_perpetual boolean NOT NULL DEFAULT false,
   scoring_mode text NOT NULL DEFAULT 'company_only'::text CHECK (scoring_mode = ANY (ARRAY['company_only'::text, 'evaluator_only'::text, 'average'::text])),
+  xp_multiplier double precision DEFAULT 1.0,
   CONSTRAINT challenges_pkey PRIMARY KEY (id),
   CONSTRAINT challenges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT challenges_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
@@ -89,6 +105,7 @@ CREATE TABLE public.conversations (
   challenge_id uuid,
   type text CHECK (type = ANY (ARRAY['direct'::text, 'team'::text, 'support'::text])),
   created_at timestamp with time zone DEFAULT now(),
+  source text DEFAULT 'company'::text,
   CONSTRAINT conversations_pkey PRIMARY KEY (id),
   CONSTRAINT conversations_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id)
 );
@@ -143,6 +160,8 @@ CREATE TABLE public.organizations (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   status text DEFAULT 'pending'::text,
+  representative_name text,
+  signature_url text,
   CONSTRAINT organizations_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.payments (
@@ -169,6 +188,10 @@ CREATE TABLE public.platform_settings (
   default_currency text DEFAULT 'PHP'::text,
   updated_at timestamp with time zone DEFAULT now(),
   advanced_beginner_weekly_limit integer DEFAULT 1,
+  xp_score_threshold integer DEFAULT 70,
+  xp_penalty integer DEFAULT 50,
+  xp_base_min integer DEFAULT 50,
+  xp_base_max integer DEFAULT 400,
   CONSTRAINT platform_settings_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.profiles (
@@ -198,6 +221,8 @@ CREATE TABLE public.profiles (
   address_country text,
   status text DEFAULT 'active'::text,
   middle_name text,
+  xp_points integer NOT NULL DEFAULT 0,
+  xp_rank text NOT NULL DEFAULT 'beginner'::text CHECK (xp_rank = ANY (ARRAY['beginner'::text, 'intermediate'::text, 'advanced'::text])),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
@@ -305,8 +330,9 @@ CREATE TABLE public.winners (
   announced_at timestamp with time zone DEFAULT now(),
   score integer,
   is_tied boolean NOT NULL DEFAULT false,
-  tie_resolved_by uuid REFERENCES public.profiles(id),
+  tie_resolved_by uuid,
   CONSTRAINT winners_pkey PRIMARY KEY (id),
   CONSTRAINT winners_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES public.challenges(id),
-  CONSTRAINT winners_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+  CONSTRAINT winners_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT winners_tie_resolved_by_fkey FOREIGN KEY (tie_resolved_by) REFERENCES public.profiles(id)
 );
