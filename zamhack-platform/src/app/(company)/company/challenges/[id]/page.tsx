@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Lock, Trophy } from "lucide-react"
+import { Lock, Trophy, CreditCard } from "lucide-react"
 import { submitChallengeForApproval, getTiedParticipantDetails } from "@/app/challenges/actions"
 import { computeRankedResultsWithBreakdown, shouldUseRankedMode, EvaluatorScore, RankedParticipantWithBreakdown } from "@/lib/rank-scoring"
 import { CloseChallengeButton } from "@/components/challenges/close-challenge-button"
@@ -428,15 +428,31 @@ async function getChallengeManagementData(
 
 const getStatusBadgeVariant = (status: string | null) => {
   switch (status) {
-    case "approved":         return "success"
-    case "in_progress":      return "default"
-    case "under_review":     return "warning"
-    case "draft":            return "outline"
-    case "pending_approval": return "warning"
-    case "completed":        return "success"
-    case "closed":           return "destructive"
-    case "cancelled":        return "destructive"
-    default:                 return "outline"
+    case "approved":                    return "success"
+    case "in_progress":                 return "default"
+    case "under_review":                return "warning"
+    case "draft":                       return "outline"
+    case "pending_approval":            return "warning"
+    case "approved_awaiting_payment":   return "warning"
+    case "completed":                   return "success"
+    case "closed":                      return "destructive"
+    case "cancelled":                   return "destructive"
+    default:                            return "outline"
+  }
+}
+
+const getStatusLabel = (status: string | null): string => {
+  switch (status) {
+    case "approved":                    return "Approved"
+    case "in_progress":                 return "In Progress"
+    case "under_review":                return "Under Review"
+    case "draft":                       return "Draft"
+    case "pending_approval":            return "Pending Approval"
+    case "approved_awaiting_payment":   return "Awaiting Payment"
+    case "completed":                   return "Completed"
+    case "closed":                      return "Closed"
+    case "cancelled":                   return "Cancelled"
+    default:                            return status ?? "Unknown"
   }
 }
 
@@ -491,7 +507,7 @@ export default async function ChallengeManagementPage({
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">{challenge.title}</h1>
             <Badge variant={getStatusBadgeVariant(challenge.status) as any}>
-              {challenge.status?.replace("_", " ") || "Unknown"}
+              {getStatusLabel(challenge.status)}
             </Badge>
           </div>
           <p className="text-muted-foreground">{challenge.description}</p>
@@ -527,6 +543,37 @@ export default async function ChallengeManagementPage({
           )}
         </div>
       </div>
+
+      {/* Payment Banner */}
+      {challenge.status === "approved_awaiting_payment" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-amber-100 p-1.5">
+              <CreditCard className="h-4 w-4 text-amber-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-amber-800 text-sm">
+                Payment required to go live
+              </p>
+              <p className="text-sm text-amber-700">
+                Your challenge has been approved with a listing fee of{" "}
+                <span className="font-semibold">
+                  PHP {(challenge.listing_fee ?? 0).toFixed(2)}
+                </span>
+                . Complete payment to publish it to students.
+              </p>
+            </div>
+          </div>
+          <Link href={`/company/challenges/${challenge.id}/payment`}>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap shrink-0"
+            >
+              Pay Now
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Tie Banner */}
       {hasTies && (

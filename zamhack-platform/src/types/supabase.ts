@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -261,6 +261,9 @@ export type Database = {
           industries: string[] | null
           industry: string | null
           is_perpetual: boolean
+          listing_fee: number | null
+          listing_fee_currency: string | null
+          listing_fee_set_by: string | null
           location_details: string | null
           location_type: string | null
           max_participants: number | null
@@ -290,6 +293,9 @@ export type Database = {
           industries?: string[] | null
           industry?: string | null
           is_perpetual?: boolean
+          listing_fee?: number | null
+          listing_fee_currency?: string | null
+          listing_fee_set_by?: string | null
           location_details?: string | null
           location_type?: string | null
           max_participants?: number | null
@@ -319,6 +325,9 @@ export type Database = {
           industries?: string[] | null
           industry?: string | null
           is_perpetual?: boolean
+          listing_fee?: number | null
+          listing_fee_currency?: string | null
+          listing_fee_set_by?: string | null
           location_details?: string | null
           location_type?: string | null
           max_participants?: number | null
@@ -339,6 +348,13 @@ export type Database = {
           {
             foreignKeyName: "challenges_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_listing_fee_set_by_fkey"
+            columns: ["listing_fee_set_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -612,6 +628,7 @@ export type Database = {
           id: string
           paid_at: string | null
           payment_intent_id: string | null
+          payment_type: string
           provider: string
           status: string
           updated_at: string | null
@@ -626,6 +643,7 @@ export type Database = {
           id?: string
           paid_at?: string | null
           payment_intent_id?: string | null
+          payment_type?: string
           provider?: string
           status?: string
           updated_at?: string | null
@@ -640,6 +658,7 @@ export type Database = {
           id?: string
           paid_at?: string | null
           payment_intent_id?: string | null
+          payment_type?: string
           provider?: string
           status?: string
           updated_at?: string | null
@@ -1257,6 +1276,7 @@ export type Database = {
       challenge_status:
         | "draft"
         | "pending_approval"
+        | "approved_awaiting_payment"
         | "approved"
         | "in_progress"
         | "under_review"
@@ -1403,6 +1423,7 @@ export const Constants = {
       challenge_status: [
         "draft",
         "pending_approval",
+        "approved_awaiting_payment",
         "approved",
         "in_progress",
         "under_review",

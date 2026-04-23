@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { Suspense } from "react"
 import {
   LayoutDashboard, Briefcase, Search,
-  Building2, HelpCircle, Settings, Zap, MessageCircle, BarChart2, BookOpen,
+  Building2, HelpCircle, Settings, Zap, MessageCircle, BarChart2, BookOpen, CreditCard,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LogoutButton } from "@/components/logout-button"
@@ -15,6 +15,7 @@ const companyNavItems = [
   { href: "/company/dashboard",    label: "Dashboard",     icon: LayoutDashboard },
   { href: "/company/challenges",   label: "Challenges",    icon: Briefcase },
   { href: "/company/analytics",    label: "Analytics",     icon: BarChart2 },
+  { href: "/company/finances",     label: "Finances",      icon: CreditCard },
   { href: "/company/talent",       label: "Talent Search", icon: Search },
   { href: "/company/messages",     label: "Messages",      icon: MessageCircle, showBadge: true },
   { href: "/company/organization", label: "Org Settings",  icon: Building2 },

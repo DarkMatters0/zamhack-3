@@ -102,7 +102,7 @@ export async function rejectOrganization(orgId: string) {
 // CHALLENGE ACTIONS
 // ==========================================
 
-export async function approveChallenge(challengeId: string) {
+export async function approveChallenge(challengeId: string, listingFee: number = 0) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -122,9 +122,19 @@ export async function approveChallenge(challengeId: string) {
     .eq('id', challengeId)
     .single()
 
+  const newStatus: Database["public"]["Enums"]["challenge_status"] = listingFee > 0
+    ? 'approved_awaiting_payment'
+    : 'approved'
+
   const { error } = await supabase
     .from("challenges")
-    .update({ status: "approved" })
+    .update({
+      status: newStatus,
+      listing_fee: listingFee > 0 ? listingFee : null,
+      listing_fee_currency: 'PHP',
+      listing_fee_set_by: listingFee > 0 ? user.id : null,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", challengeId)
 
   if (error) throw new Error("Failed to approve challenge")
@@ -137,7 +147,11 @@ export async function approveChallenge(challengeId: string) {
     entity_id: challengeId,
     entity_label: challengeForLog?.title ?? undefined,
     organization_id: challengeForLog?.organization_id ?? undefined,
-    metadata: { challenge_id: challengeId },
+    metadata: {
+      challenge_id: challengeId,
+      listing_fee: listingFee,
+      listing_fee_free: listingFee === 0,
+    },
   })
 
   revalidatePath("/admin/dashboard")

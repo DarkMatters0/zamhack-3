@@ -13,7 +13,10 @@
       "Bash(npm list *)",
       "Bash(node -e \"const j = require\\('jspdf'\\); console.log\\(Object.keys\\(j\\)\\)\")",
       "Bash(xargs grep *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(npx supabase *)",
+      "Bash(npx *)",
+      "Bash(node *)"
     ]
   }
 }

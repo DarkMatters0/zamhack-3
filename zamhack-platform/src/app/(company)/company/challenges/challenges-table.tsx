@@ -10,6 +10,7 @@ import {
   Users,
   FileText,
   ArrowUpDown,
+  CreditCard,
 } from "lucide-react"
 
 interface ChallengeWithStats {
@@ -32,39 +33,42 @@ interface ChallengesTableProps {
 const PAGE_SIZE = 10
 
 const STATUS_TABS = [
-  { key: "all",              label: "All" },
-  { key: "draft",            label: "Draft" },
-  { key: "pending_approval", label: "Pending" },
-  { key: "approved",         label: "Active" },
-  { key: "in_progress",      label: "In Progress" },
-  { key: "under_review",     label: "Under Review" },
-  { key: "completed",        label: "Completed" },
-  { key: "cancelled",        label: "Cancelled" },
+  { key: "all",                          label: "All" },
+  { key: "draft",                        label: "Draft" },
+  { key: "pending_approval",             label: "Pending" },
+  { key: "approved_awaiting_payment",    label: "Awaiting Payment" },
+  { key: "approved",                     label: "Active" },
+  { key: "in_progress",                  label: "In Progress" },
+  { key: "under_review",                 label: "Under Review" },
+  { key: "completed",                    label: "Completed" },
+  { key: "cancelled",                    label: "Cancelled" },
 ]
 
 function getStatusClass(status: string | null): string {
   switch (status) {
-    case "approved":         return "active"
-    case "in_progress":      return "in-progress"
-    case "under_review":     return "under-review"
-    case "draft":            return "draft"
-    case "pending_approval": return "pending"
-    case "completed":        return "completed"
-    case "cancelled":        return "cancelled"
-    default:                 return "draft"
+    case "approved":                    return "active"
+    case "in_progress":                 return "in-progress"
+    case "under_review":                return "under-review"
+    case "draft":                       return "draft"
+    case "pending_approval":            return "pending"
+    case "approved_awaiting_payment":   return "pending"
+    case "completed":                   return "completed"
+    case "cancelled":                   return "cancelled"
+    default:                            return "draft"
   }
 }
 
 function getStatusLabel(status: string | null): string {
   switch (status) {
-    case "approved":         return "Active"
-    case "in_progress":      return "In Progress"
-    case "under_review":     return "Under Review"
-    case "draft":            return "Draft"
-    case "pending_approval": return "Pending"
-    case "completed":        return "Completed"
-    case "cancelled":        return "Cancelled"
-    default:                 return status ?? "Unknown"
+    case "approved":                    return "Active"
+    case "in_progress":                 return "In Progress"
+    case "under_review":                return "Under Review"
+    case "draft":                       return "Draft"
+    case "pending_approval":            return "Pending"
+    case "approved_awaiting_payment":   return "Awaiting Payment"
+    case "completed":                   return "Completed"
+    case "cancelled":                   return "Cancelled"
+    default:                            return status ?? "Unknown"
   }
 }
 
@@ -394,7 +398,17 @@ export function ChallengesTable({ challenges }: ChallengesTableProps) {
                   </td>
 
                   <td style={{ textAlign: "right" }}>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
+                      {(challenge.status as string) === "approved_awaiting_payment" && (
+                        <Link
+                          href={`/company/challenges/${challenge.id}/payment`}
+                          className="cp-btn cp-btn-sm"
+                          style={{ display: "flex", alignItems: "center", gap: "0.3rem", background: "none", border: "none", color: "#b45309", fontWeight: 600, fontSize: "0.8125rem", textDecoration: "underline", textUnderlineOffset: "2px", cursor: "pointer", padding: "0.25rem 0.5rem" }}
+                        >
+                          <CreditCard style={{ width: "0.875rem", height: "0.875rem" }} />
+                          Pay Now
+                        </Link>
+                      )}
                       <Link
                         href={`/company/challenges/${challenge.id}`}
                         className="cp-btn cp-btn-primary cp-btn-sm"

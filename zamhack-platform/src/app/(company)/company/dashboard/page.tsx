@@ -11,6 +11,7 @@ import {
   ArrowRight,
   MessageCircle,
   CalendarDays,
+  CreditCard,
 } from "lucide-react"
 
 type Challenge = Database["public"]["Tables"]["challenges"]["Row"]
@@ -123,7 +124,7 @@ async function getCompanyDashboardData(): Promise<DashboardData> {
     .from("challenges")
     .select("*")
     .eq("organization_id", profile.organization_id)
-    .in("status", ["approved", "in_progress", "draft", "pending_approval"])
+    .in("status", ["approved", "in_progress", "draft", "pending_approval", "approved_awaiting_payment"])
     .order("created_at", { ascending: false })
 
   const activeChallengesList = (activeChallenges as Challenge[]) || []
@@ -275,23 +276,25 @@ async function getCompanyDashboardData(): Promise<DashboardData> {
 // ── Helpers ────────────────────────────────────────────────────────
 function getStatusClass(status: string | null): string {
   switch (status) {
-    case "approved":         return "active"
-    case "in_progress":      return "in-progress"
-    case "under_review":     return "under-review"
-    case "draft":            return "draft"
-    case "pending_approval": return "pending"
-    default:                 return "draft"
+    case "approved":                    return "active"
+    case "in_progress":                 return "in-progress"
+    case "under_review":                return "under-review"
+    case "draft":                       return "draft"
+    case "pending_approval":            return "pending"
+    case "approved_awaiting_payment":   return "pending"
+    default:                            return "draft"
   }
 }
 
 function getStatusLabel(status: string | null): string {
   switch (status) {
-    case "approved":         return "Active"
-    case "in_progress":      return "In Progress"
-    case "under_review":     return "Under Review"
-    case "draft":            return "Draft"
-    case "pending_approval": return "Pending"
-    default:                 return status ?? "Unknown"
+    case "approved":                    return "Active"
+    case "in_progress":                 return "In Progress"
+    case "under_review":                return "Under Review"
+    case "draft":                       return "Draft"
+    case "pending_approval":            return "Pending"
+    case "approved_awaiting_payment":   return "Awaiting Payment"
+    default:                            return status ?? "Unknown"
   }
 }
 
@@ -315,6 +318,10 @@ export default async function CompanyDashboardPage() {
     pendingReviews,
     recentSubmissions,
   } = await getCompanyDashboardData()
+
+  const awaitingPaymentCount = activeChallenges.filter(
+    (c) => (c.status as string) === "approved_awaiting_payment"
+  ).length
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A"
@@ -378,6 +385,37 @@ export default async function CompanyDashboardPage() {
           <p className="cp-stat-label">New Submissions</p>
         </div>
       </div>
+
+      {/* ── Awaiting Payment Alert ── */}
+      {awaitingPaymentCount > 0 && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          padding: "1rem 1.25rem",
+          borderRadius: "0.75rem",
+          border: "1px solid #fde68a",
+          background: "#fffbeb",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ padding: "0.5rem", borderRadius: "9999px", background: "#fef3c7" }}>
+              <CreditCard style={{ width: "1.125rem", height: "1.125rem", color: "#92400e" }} />
+            </div>
+            <div>
+              <p style={{ fontWeight: 700, color: "#92400e", fontSize: "0.9375rem", margin: 0 }}>
+                {awaitingPaymentCount} challenge{awaitingPaymentCount !== 1 ? "s" : ""} awaiting payment
+              </p>
+              <p style={{ color: "#b45309", fontSize: "0.8125rem", margin: 0 }}>
+                Complete payment to publish your approved challenges to students.
+              </p>
+            </div>
+          </div>
+          <Link href="/company/challenges" className="cp-btn cp-btn-sm" style={{ background: "#d97706", color: "white", border: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
+            View Challenges
+          </Link>
+        </div>
+      )}
 
       {/* ── Middle Row: Submissions table + Quick Actions ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "1rem", alignItems: "start" }}>

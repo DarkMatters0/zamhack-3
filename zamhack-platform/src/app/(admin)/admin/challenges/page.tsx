@@ -15,6 +15,7 @@ import {
   Ban,
   ShieldCheck,
   Zap,
+  CreditCard,
 } from "lucide-react"
 import "@/app/(admin)/admin.css"
 import { GuardrailsForm } from "./guardrails-form"
@@ -33,6 +34,7 @@ const PER_PAGE = 10
 const ALL_STATUSES = [
   "draft",
   "pending_approval",
+  "approved_awaiting_payment",
   "approved",
   "in_progress",
   "under_review",
@@ -130,9 +132,10 @@ export default async function AdminChallengesPage({
 
   // --- Tabs config ---
   const tabs = [
-    { key: "all",             label: "All",             icon: Layers,       count: counts.all },
-    { key: "pending_approval",label: "Pending",         icon: Clock,        count: counts.pending_approval },
-    { key: "approved",        label: "Approved",        icon: CheckCircle2, count: counts.approved },
+    { key: "all",                       label: "All",              icon: Layers,       count: counts.all },
+    { key: "pending_approval",          label: "Pending",          icon: Clock,        count: counts.pending_approval },
+    { key: "approved_awaiting_payment", label: "Awaiting Payment", icon: CreditCard,   count: counts.approved_awaiting_payment ?? 0 },
+    { key: "approved",                  label: "Approved",         icon: CheckCircle2, count: counts.approved },
     { key: "in_progress",     label: "In Progress",     icon: Trophy,       count: counts.in_progress },
     { key: "under_review",    label: "Under Review",    icon: FileText,     count: counts.under_review },
     { key: "completed",       label: "Completed",       icon: CheckCircle2, count: counts.completed },
@@ -150,8 +153,9 @@ export default async function AdminChallengesPage({
       case "in_progress":     return "blue"
       case "under_review":    return "coral"
       case "completed":       return "green"
-      case "pending_approval":return "yellow"
-      case "draft":           return "gray"
+      case "pending_approval":          return "yellow"
+      case "approved_awaiting_payment": return "yellow"
+      case "draft":                     return "gray"
       case "rejected":        return "red"
       case "cancelled":       return "red"
       default:                return "gray"

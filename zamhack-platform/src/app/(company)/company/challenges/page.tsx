@@ -109,7 +109,7 @@ export default async function CompanyChallengesPage() {
   const stats = {
     total: challenges.length,
     active: challenges.filter((c) => c.status === "approved" || c.status === "in_progress").length,
-    pending: challenges.filter((c) => c.status === "pending_approval" || c.status === "draft").length,
+    pending: challenges.filter((c) => c.status === "pending_approval" || c.status === "draft" || (c.status as string) === "approved_awaiting_payment").length,
     completed: challenges.filter((c) => c.status === "completed").length,
   }
 

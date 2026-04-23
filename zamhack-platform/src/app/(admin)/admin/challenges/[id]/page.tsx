@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { approveChallenge, rejectChallenge, approvePendingEdit, rejectPendingEdit } from "@/app/admin/actions"
+import { rejectChallenge, approvePendingEdit, rejectPendingEdit } from "@/app/admin/actions"
 import { ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react"
 import EvaluatorAssignmentPanel from "@/components/admin/evaluator-assignment-panel"
+import { ApproveChallengeModal } from "@/components/admin/approve-challenge-modal"
 
 export default async function AdminChallengeDetailsPage({
   params,
@@ -111,18 +112,30 @@ export default async function AdminChallengeDetailsPage({
               </Button>
             </form>
 
-            <form action={async () => {
-              "use server"
-              await approveChallenge(challenge.id)
-            }}>
-              <Button type="submit" className="bg-green-600 hover:bg-green-700 gap-2">
-                <CheckCircle className="h-4 w-4" />
-                Approve Challenge
-              </Button>
-            </form>
+            <ApproveChallengeModal
+              challengeId={challenge.id}
+              challengeTitle={challenge.title}
+            />
           </div>
         )}
       </div>
+
+      {/* ── Awaiting Payment Banner ── */}
+      {(challenge.status as any) === 'approved_awaiting_payment' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-amber-800">Awaiting company payment</p>
+            <p className="text-sm text-amber-700">
+              This challenge was approved with a listing fee of{' '}
+              PHP {((challenge as any).listing_fee ?? 0).toFixed(2)}.
+              It will go live once the company completes payment.
+            </p>
+          </div>
+          <Badge className="bg-amber-100 text-amber-800 border-amber-300">
+            Awaiting Payment
+          </Badge>
+        </div>
+      )}
 
       {/* ── Pending Edits Queue ── */}
       {pendingEdits && pendingEdits.length > 0 && (

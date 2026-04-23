@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
 
   const challengeId = metadata?.challenge_id ?? null
   const userId      = metadata?.user_id ?? null
+  const paymentType = metadata?.payment_type ?? "student_entry"
 
   console.log("🔍 Extracted:", { sessionId, challengeId, userId })
 
@@ -149,6 +150,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 7. Update Payment Record to "paid" ────────────────────────────────────
+  // Shared for both student and company flows.
   if (existingPayment) {
     const { error: updateError } = await supabase
       .from("payments")
@@ -162,7 +164,7 @@ export async function POST(req: NextRequest) {
 
     if (updateError) {
       console.error("❌ Failed to update payment record:", updateError)
-      // Don't return error — still try to join the challenge below
+      // Don't return error — still attempt the downstream action below
     }
   } else {
     // Edge case: payment record wasn't created in create-checkout
@@ -179,6 +181,7 @@ export async function POST(req: NextRequest) {
         checkout_session_id: sessionId,
         payment_intent_id: paymentIntentId,
         paid_at: new Date().toISOString(),
+        payment_type: paymentType,          // preserve discriminator
       })
 
     if (insertError) {
@@ -186,44 +189,70 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── 8. Check if Already a Participant ─────────────────────────────────────
-  // Extra safety — don't double-join
-  const { data: alreadyJoined } = await supabase
-    .from("challenge_participants")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("challenge_id", challengeId)
-    .single()
+  // ── 8. Branch on payment_type ─────────────────────────────────────────────
+  if (paymentType === "company_listing") {
+    // ── Company Listing Fee: flip challenge live ──────────────────────────
+    console.log(`💳 Company listing payment confirmed for challenge ${challengeId}`)
 
-  if (alreadyJoined) {
-    console.log("✅ User already joined challenge — skipping joinChallenge():", userId)
-    return NextResponse.json({ received: true, skipped: true }, { status: 200 })
+    // Two-step cast needed to avoid TS2589 on chained .eq() with non-schema column
+    const challengeUpdateQuery = (supabase
+      .from("challenges")
+      .update({ status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", challengeId) as any)
+      .eq("status", "approved_awaiting_payment") // safety guard: no-op on retry
+    const { error: challengeUpdateError } = await challengeUpdateQuery
+
+    if (challengeUpdateError) {
+      console.error("❌ Failed to flip challenge to approved:", challengeUpdateError)
+      return NextResponse.json(
+        { error: "Payment recorded but failed to activate challenge." },
+        { status: 500 }
+      )
+    }
+
+    console.log(`✅ Challenge ${challengeId} is now live (approved).`)
+    return NextResponse.json({ received: true }, { status: 200 })
+
+  } else {
+    // ── Student Entry Fee: join the challenge ─────────────────────────────
+    console.log(`🎓 Student entry payment confirmed for challenge ${challengeId}`)
+
+    // Extra safety — don't double-join
+    const { data: alreadyJoined } = await supabase
+      .from("challenge_participants")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("challenge_id", challengeId)
+      .single()
+
+    if (alreadyJoined) {
+      console.log("✅ User already joined challenge — skipping joinChallenge():", userId)
+      return NextResponse.json({ received: true, skipped: true }, { status: 200 })
+    }
+
+    // joinChallenge() uses the session user, but webhook has no session.
+    // Insert the participant row directly here instead.
+    const { error: joinError } = await supabase
+      .from("challenge_participants")
+      .insert({
+        challenge_id: challengeId,
+        user_id: userId,
+        team_id: null,
+        status: "active",
+        joined_at: new Date().toISOString(),
+      })
+
+    if (joinError) {
+      console.error("❌ Failed to join challenge after payment:", joinError)
+      return NextResponse.json(
+        { error: "Payment recorded but failed to join challenge." },
+        { status: 500 }
+      )
+    }
+
+    console.log(`✅ User ${userId} successfully joined challenge ${challengeId} after payment.`)
+
+    // Always return 200 to PayMongo — anything else triggers a retry
+    return NextResponse.json({ received: true }, { status: 200 })
   }
-
-  // ── 9. Officially Join the Challenge ──────────────────────────────────────
-  // joinChallenge() uses the session user, but webhook has no session.
-  // So we insert the participant row directly here instead.
-  const { error: joinError } = await supabase
-    .from("challenge_participants")
-    .insert({
-      challenge_id: challengeId,
-      user_id: userId,
-      team_id: null,
-      status: "active",
-      joined_at: new Date().toISOString(),
-    })
-
-  if (joinError) {
-    console.error("❌ Failed to join challenge after payment:", joinError)
-    return NextResponse.json(
-      { error: "Payment recorded but failed to join challenge." },
-      { status: 500 }
-    )
-  }
-
-  console.log(`✅ User ${userId} successfully joined challenge ${challengeId} after payment.`)
-
-  // ── 10. Always return 200 to PayMongo ─────────────────────────────────────
-  // If we return anything other than 200, PayMongo will retry the webhook
-  return NextResponse.json({ received: true }, { status: 200 })
 }
