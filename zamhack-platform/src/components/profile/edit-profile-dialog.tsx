@@ -171,6 +171,7 @@ export const EditProfileDialog = ({ profile }: EditProfileDialogProps) => {
               value={university}
               onChange={setUniversity}
               disabled={isSubmitting}
+              suggestedBy={profile?.id ?? null}
             />
           </div>
 

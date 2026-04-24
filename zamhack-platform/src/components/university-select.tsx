@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react"
 import { ChevronDown, Search, X } from "lucide-react"
+import { getActiveUniversities, suggestUniversity } from "@/app/actions/university-public-actions"
 
-// CHED-recognized Philippine universities (representative list)
+// Fallback list used if DB fetch fails or returns empty
 export const PH_UNIVERSITIES = [
   // NCR
   "University of the Philippines Diliman",
@@ -49,11 +50,9 @@ export const PH_UNIVERSITIES = [
   // Region IV
   "Cavite State University",
   "Laguna State Polytechnic University",
-  "University of the Philippines Los Baños",
   "Batangas State University",
   "Lyceum of the Philippines University",
   "De La Salle University Dasmariñas",
-  "Ateneo de Manila University",
   "University of Batangas",
   "Palawan State University",
   "Western Philippines University",
@@ -63,7 +62,6 @@ export const PH_UNIVERSITIES = [
   "University of Nueva Caceres",
   "Camarines Sur Polytechnic Colleges",
   // Region VI
-  "University of the Philippines Visayas",
   "West Visayas State University",
   "Iloilo Science and Technology University",
   "Central Philippine University",
@@ -99,7 +97,6 @@ export const PH_UNIVERSITIES = [
   "Capitol University",
   "Liceo de Cagayan University",
   // Region XI
-  "University of the Philippines Mindanao",
   "Davao del Norte State College",
   "Holy Cross of Davao College",
   "Ateneo de Davao University",
@@ -110,7 +107,6 @@ export const PH_UNIVERSITIES = [
   "Notre Dame of Marbel University",
   "Notre Dame University Cotabato",
   "Mindanao State University General Santos",
-  "Central Mindanao University",
   "Sultan Kudarat State University",
   // CARAGA
   "Caraga State University",
@@ -140,6 +136,7 @@ interface UniversitySelectProps {
   disabled?: boolean
   error?: string
   placeholder?: string
+  suggestedBy?: string | null
 }
 
 export function UniversitySelect({
@@ -148,49 +145,80 @@ export function UniversitySelect({
   disabled = false,
   error,
   placeholder = "Select your university",
+  suggestedBy = null,
 }: UniversitySelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [showOther, setShowOther] = useState(false)
   const [otherValue, setOtherValue] = useState("")
+  const [universities, setUniversities] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Determine if current value is a "custom" (not in list) value
-  const isCustomValue = value && !PH_UNIVERSITIES.includes(value) && value !== "Other"
+  // Refs so event handlers always read current values without stale closures
+  const showOtherRef = useRef(showOther)
+  const valueRef = useRef(value)
+  const universitiesRef = useRef(universities)
+  const loadingRef = useRef(loading)
+  const suggestedByRef = useRef(suggestedBy)
+  showOtherRef.current = showOther
+  valueRef.current = value
+  universitiesRef.current = universities
+  loadingRef.current = loading
+  suggestedByRef.current = suggestedBy
 
-  // On mount, if value is custom, show the other input
+  // Fetch universities on mount; fall back to PH_UNIVERSITIES if empty or error
   useEffect(() => {
-    if (isCustomValue) {
+    getActiveUniversities()
+      .then((list) => {
+        const clean = list.filter((u) => u !== "Other")
+        setUniversities(clean.length > 0 ? clean : PH_UNIVERSITIES.filter((u) => u !== "Other"))
+      })
+      .catch(() => {
+        setUniversities(PH_UNIVERSITIES.filter((u) => u !== "Other"))
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  // After universities load, restore showOther state if the current value is custom
+  useEffect(() => {
+    if (!loading && value && !universities.includes(value) && value !== "Other") {
       setShowOther(true)
       setOtherValue(value)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close on outside click
+  // Fire-and-forget suggestion when the user typed a value not in the list
+  const fireSuggest = () => {
+    const val = valueRef.current
+    if (loadingRef.current || !val || universitiesRef.current.includes(val)) return
+    suggestUniversity(val, suggestedByRef.current ?? null)
+  }
+
+  // Close on outside click; suggest if user had typed a custom value
   useEffect(() => {
     const handle = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        if (showOtherRef.current && valueRef.current) fireSuggest()
         setOpen(false)
         setSearch("")
       }
     }
     document.addEventListener("mousedown", handle)
     return () => document.removeEventListener("mousedown", handle)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search when dropdown opens
   useEffect(() => {
     if (open) setTimeout(() => searchRef.current?.focus(), 50)
   }, [open])
 
-  const filtered = PH_UNIVERSITIES.filter((u) =>
+  const filtered = universities.filter((u) =>
     u.toLowerCase().includes(search.toLowerCase())
   )
 
-  const displayValue = showOther
-    ? otherValue || ""
-    : value || ""
+  const displayValue = showOther ? otherValue || "" : value || ""
 
   const handleSelect = (uni: string) => {
     if (uni === "Other") {
@@ -308,7 +336,11 @@ export function UniversitySelect({
 
           {/* List */}
           <div style={{ maxHeight: 240, overflowY: "auto" }}>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div style={{ padding: "1rem", textAlign: "center", color: "#9ca3af", fontSize: "0.8125rem" }}>
+                Loading...
+              </div>
+            ) : filtered.length === 0 ? (
               <div style={{ padding: "1rem", textAlign: "center", color: "#9ca3af", fontSize: "0.8125rem" }}>
                 No results. Select "Other" to type your school.
               </div>
@@ -370,7 +402,10 @@ export function UniversitySelect({
             boxSizing: "border-box",
           }}
           onFocus={(e) => (e.target.style.borderColor = "#ff9b87")}
-          onBlur={(e) => (e.target.style.borderColor = error ? "#ef4444" : "#e5e7eb")}
+          onBlur={(e) => {
+            e.target.style.borderColor = error ? "#ef4444" : "#e5e7eb"
+            if (valueRef.current) fireSuggest()
+          }}
         />
       )}
 

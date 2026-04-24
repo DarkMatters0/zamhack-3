@@ -174,6 +174,7 @@ export default function SignupPage() {
                     }}
                     disabled={isSubmitting}
                     error={studentForm.formState.errors.university?.message}
+                    suggestedBy={null}
                   />
                 </div>
 

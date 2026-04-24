@@ -1181,6 +1181,44 @@ export type Database = {
           },
         ]
       }
+      universities: {
+        Row: {
+          id: string
+          name: string
+          is_active: boolean
+          is_suggested: boolean
+          suggested_by: string | null
+          created_at: string
+          region: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          is_active?: boolean
+          is_suggested?: boolean
+          suggested_by?: string | null
+          created_at?: string
+          region?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          is_active?: boolean
+          is_suggested?: boolean
+          suggested_by?: string | null
+          created_at?: string
+          region?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "universities_suggested_by_fkey"
+            columns: ["suggested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       winners: {
         Row: {
           announced_at: string | null
