@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   updateChallenge,
   type MilestoneInput,
@@ -211,6 +212,9 @@ export default function EditChallengeForm({
         milestones,
       });
 
+      if (result.type === "resubmitted") {
+        toast.success("Challenge resubmitted for review");
+      }
       router.push(result.redirectTo);
       router.refresh();
     } catch (err: any) {

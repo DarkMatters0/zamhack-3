@@ -575,6 +575,25 @@ export default async function ChallengeManagementPage({
         </div>
       )}
 
+      {/* Rejection Banner */}
+      {challenge.status === "rejected" && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <div className="mt-0.5 rounded-full bg-red-100 p-1.5 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-red-800 text-sm">Challenge Rejected</p>
+            <p className="text-sm text-red-700 mt-0.5">
+              {(challenge as any).rejection_feedback
+                ? (challenge as any).rejection_feedback
+                : "This challenge was rejected by an admin. Please review and resubmit as a new challenge."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tie Banner */}
       {hasTies && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex items-start gap-3">

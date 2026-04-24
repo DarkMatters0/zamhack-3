@@ -158,7 +158,7 @@ export async function approveChallenge(challengeId: string, listingFee: number =
   revalidatePath(`/admin/challenges/${challengeId}`)
 }
 
-export async function rejectChallenge(challengeId: string) {
+export async function rejectChallenge(challengeId: string, reason?: string) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -180,7 +180,7 @@ export async function rejectChallenge(challengeId: string) {
 
   const { error } = await supabase
     .from("challenges")
-    .update({ status: "draft" })
+    .update({ status: "rejected", rejection_feedback: reason ?? null } as any)
     .eq("id", challengeId)
 
   if (error) throw new Error("Failed to reject challenge")

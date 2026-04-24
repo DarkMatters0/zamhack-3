@@ -42,6 +42,7 @@ const STATUS_TABS = [
   { key: "under_review",                 label: "Under Review" },
   { key: "completed",                    label: "Completed" },
   { key: "cancelled",                    label: "Cancelled" },
+  { key: "rejected",                     label: "Rejected" },
 ]
 
 function getStatusClass(status: string | null): string {
@@ -54,6 +55,7 @@ function getStatusClass(status: string | null): string {
     case "approved_awaiting_payment":   return "pending"
     case "completed":                   return "completed"
     case "cancelled":                   return "cancelled"
+    case "rejected":                    return "cancelled"
     default:                            return "draft"
   }
 }
@@ -68,6 +70,7 @@ function getStatusLabel(status: string | null): string {
     case "approved_awaiting_payment":   return "Awaiting Payment"
     case "completed":                   return "Completed"
     case "cancelled":                   return "Cancelled"
+    case "rejected":                    return "Rejected"
     default:                            return status ?? "Unknown"
   }
 }

@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { rejectChallenge, approvePendingEdit, rejectPendingEdit } from "@/app/admin/actions"
+import { approvePendingEdit, rejectPendingEdit } from "@/app/admin/actions"
 import { ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react"
 import EvaluatorAssignmentPanel from "@/components/admin/evaluator-assignment-panel"
 import { ApproveChallengeModal } from "@/components/admin/approve-challenge-modal"
+import { RejectChallengeModal } from "./reject-challenge-modal"
 
 export default async function AdminChallengeDetailsPage({
   params,
@@ -102,15 +103,7 @@ export default async function AdminChallengeDetailsPage({
 
         {challenge.status === "pending_approval" && (
           <div className="flex items-center gap-3">
-            <form action={async () => {
-              "use server"
-              await rejectChallenge(challenge.id)
-            }}>
-              <Button type="submit" variant="destructive" className="gap-2">
-                <XCircle className="h-4 w-4" />
-                Reject (Draft)
-              </Button>
-            </form>
+            <RejectChallengeModal challengeId={challenge.id} />
 
             <ApproveChallengeModal
               challengeId={challenge.id}

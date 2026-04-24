@@ -273,6 +273,8 @@ export type Database = {
           participation_type: string | null
           problem_brief: string | null
           registration_deadline: string | null
+          banner_image: string | null
+          rejection_feedback: string | null
           scoring_mode: string
           start_date: string | null
           status: Database["public"]["Enums"]["challenge_status"] | null
@@ -305,6 +307,8 @@ export type Database = {
           participation_type?: string | null
           problem_brief?: string | null
           registration_deadline?: string | null
+          banner_image?: string | null
+          rejection_feedback?: string | null
           scoring_mode?: string
           start_date?: string | null
           status?: Database["public"]["Enums"]["challenge_status"] | null
@@ -337,6 +341,8 @@ export type Database = {
           participation_type?: string | null
           problem_brief?: string | null
           registration_deadline?: string | null
+          banner_image?: string | null
+          rejection_feedback?: string | null
           scoring_mode?: string
           start_date?: string | null
           status?: Database["public"]["Enums"]["challenge_status"] | null

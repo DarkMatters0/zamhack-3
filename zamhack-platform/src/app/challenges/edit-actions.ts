@@ -43,10 +43,11 @@ export type UpdateChallengeInput = {
 
 // Challenges in these statuses have no live participants yet,
 // so edits can be applied directly without admin review.
-const DIRECT_EDIT_STATUSES = ["draft", "pending_approval"];
+const DIRECT_EDIT_STATUSES = ["draft", "pending_approval", "rejected"];
 
 export type UpdateChallengeResult =
   | { type: "updated"; redirectTo: string }
+  | { type: "resubmitted"; redirectTo: string }
   | { type: "pending_review"; redirectTo: string };
 
 export async function updateChallenge(
@@ -74,6 +75,9 @@ export async function updateChallenge(
 
   if (isDirect) {
     // Draft / Pending Approval → apply directly
+    // Rejected challenges re-enter the approval queue on save.
+    const resolvedStatus = data.status === "rejected" ? "pending_approval" : data.status;
+
     const { error: challengeError } = await supabase
       .from("challenges")
       .update({
@@ -83,7 +87,7 @@ export async function updateChallenge(
         industry: data.industries?.[0] ?? null,
         industries: data.industries,
         difficulty: data.difficulty,
-        status: data.status,
+        status: resolvedStatus,
         participation_type: data.participation_type,
         max_participants: data.max_participants,
         max_teams: data.max_teams,
@@ -174,7 +178,8 @@ export async function updateChallenge(
     })
 
     revalidatePath(`/company/challenges/${challengeId}`);
-    return { type: "updated", redirectTo: `/company/challenges/${challengeId}` };
+    const resultType = data.status === "rejected" ? "resubmitted" : "updated";
+    return { type: resultType, redirectTo: `/company/challenges/${challengeId}` };
 
   } else {
     // Live challenge → stage for admin review
