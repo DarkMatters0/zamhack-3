@@ -145,7 +145,7 @@ export async function approveCollaborationEdit(
       .insert({
         challenge_id: challengeId,
         submitted_by: edit.submitted_by, // preserve collaborator attribution
-        payload: edit.payload as any,
+        payload: JSON.parse(JSON.stringify(edit.payload)),
         status: "pending",
       } as any)
       .select("id")

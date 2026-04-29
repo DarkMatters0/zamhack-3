@@ -36,6 +36,17 @@ const ACTION_LABELS: Record<string, string> = {
   "tie.resolved":           "Resolved tie",
   "member.invited":         "Invited member",
   "member.removed":         "Removed member",
+  // Collaboration
+  "collab.invite_sent":            "Sent collaboration invite",
+  "collab.invite_admin_approved":  "Approved collaboration invite",
+  "collab.invite_admin_rejected":  "Rejected collaboration invite",
+  "collab.invite_accepted":        "Accepted collaboration invite",
+  "collab.revoked_by_owner":       "Revoked collaboration (owner)",
+  "collab.revoked_by_admin":       "Revoked collaboration (admin)",
+  "collab.revoked_via_suspension": "Collaboration revoked — org suspended",
+  "collab.edit_proposed":          "Proposed collaboration edit",
+  "collab.edit_owner_approved":    "Approved collaboration edit",
+  "collab.edit_owner_rejected":    "Rejected collaboration edit",
 }
 
 const formatTimestamp = (dateString: string) => {

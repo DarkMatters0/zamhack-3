@@ -142,7 +142,7 @@ export async function suspendOrganization(orgId: string) {
         token_expires_at: null,
         admin_note: "Automatically revoked due to organization suspension",
         updated_at: new Date().toISOString(),
-      } as any)
+      })
       .in("id", activeCollabs.map((c) => c.id))
 
     for (const collab of activeCollabs) {
@@ -155,9 +155,57 @@ export async function suspendOrganization(orgId: string) {
         metadata: {
           challenge_id: collab.challenge_id,
           suspended_org_id: orgId,
+          cascade_side: "collaborator",
           previous_status: collab.status,
         },
       })
+    }
+  }
+
+  // Collaboration cascade (owner side) — revoke collaborators on challenges owned by suspended org
+  const { data: ownedChallenges } = await serviceSupabase
+    .from("challenges")
+    .select("id")
+    .eq("organization_id", orgId)
+
+  if (ownedChallenges && ownedChallenges.length > 0) {
+    const ownedChallengeIds = ownedChallenges.map((c) => c.id)
+
+    const { data: ownerSideCollabs } = await serviceSupabase
+      .from("challenge_collaborators")
+      .select("id, challenge_id, organization_id, status")
+      .in("challenge_id", ownedChallengeIds)
+      .in("status", ["pending_admin_review", "pending_acceptance", "active"])
+
+    if (ownerSideCollabs && ownerSideCollabs.length > 0) {
+      await serviceSupabase
+        .from("challenge_collaborators")
+        .update({
+          status: "revoked",
+          revoked_at: new Date().toISOString(),
+          revoked_by: user.id,
+          invite_token: null,
+          token_expires_at: null,
+          admin_note: "Automatically revoked — challenge owner organization suspended",
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ownerSideCollabs.map((c) => c.id))
+
+      for (const collab of ownerSideCollabs) {
+        await logActivity({
+          log_type: "admin",
+          actor_id: user.id,
+          action: ActivityAction.COLLAB_REVOKED_VIA_SUSPENSION,
+          entity_type: EntityType.COLLABORATION,
+          entity_id: collab.id,
+          metadata: {
+            challenge_id: collab.challenge_id,
+            suspended_org_id: orgId,
+            cascade_side: "owner",
+            previous_status: collab.status,
+          },
+        })
+      }
     }
   }
 

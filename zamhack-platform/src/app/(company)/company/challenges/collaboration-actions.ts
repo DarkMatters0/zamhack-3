@@ -342,10 +342,10 @@ export async function acceptCollaborationInvite(
 
   if (updateError) throw new Error("Failed to accept collaboration invite")
 
-  // Fetch owner org for log entry
+  // Fetch owner org + title for log entry
   const { data: challenge } = await supabase
     .from("challenges")
-    .select("organization_id")
+    .select("organization_id, title")
     .eq("id", collaboration.challenge_id)
     .single()
 
@@ -353,6 +353,7 @@ export async function acceptCollaborationInvite(
     action: ActivityAction.COLLAB_INVITE_ACCEPTED,
     entity_type: EntityType.COLLABORATION,
     entity_id: collaboration.id,
+    entity_label: challenge?.title ?? undefined,
     metadata: {
       challenge_id: collaboration.challenge_id,
       collaboration_id: collaboration.id,
@@ -365,6 +366,7 @@ export async function acceptCollaborationInvite(
   ])
 
   revalidatePath(`/company/challenges/${collaboration.challenge_id}`)
+  revalidatePath("/company/challenges")
   return { success: true, challengeId: collaboration.challenge_id }
 }
 
@@ -436,7 +438,7 @@ export async function submitCollaborationEdit(
       challenge_id: challengeId,
       collaborator_org_id: profile.organization_id,
       submitted_by: user.id,
-      payload,
+      payload: JSON.parse(JSON.stringify(payload)),
       status: "pending_owner_review",
     })
     .select("id")
