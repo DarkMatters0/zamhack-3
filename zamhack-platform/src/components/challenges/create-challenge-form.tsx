@@ -609,30 +609,45 @@ export const CreateChallengeForm = ({ organizationId }: { organizationId: string
                 </div>
 
                 {watchedValues.requiresEntryFee && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        {...form.register("entryFeeAmount")}
-                        title="Entry Fee Amount"
-                        type="number"
-                        placeholder="100.00"
-                        min={0}
-                        step={0.01}
-                      />
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Amount</Label>
+                        <Input
+                          {...form.register("entryFeeAmount")}
+                          title="Entry Fee Amount"
+                          type="number"
+                          placeholder="100.00"
+                          min={0}
+                          step={0.01}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Currency</Label>
+                        <Select onValueChange={(val) => form.setValue("currency", val)} defaultValue={watchedValues.currency}>
+                          <SelectTrigger title="Currency">
+                            <SelectValue placeholder="Currency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Currency</Label>
-                      <Select onValueChange={(val) => form.setValue("currency", val)} defaultValue={watchedValues.currency}>
-                        <SelectTrigger title="Currency">
-                          <SelectValue placeholder="Currency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
+                      <p className="font-semibold">Entry Fee Policy</p>
+                      <p>
+                        ZamHack retains a <span className="font-semibold">15% platform fee</span> on
+                        all student entry payments. The remaining 85% will be disbursed to your
+                        organization within 7 days after the challenge registration period closes.
+                      </p>
+                      <p>
+                        In the event of a challenge cancellation, refund eligibility will be
+                        determined by ZamHack on a case-by-case basis.
+                      </p>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
