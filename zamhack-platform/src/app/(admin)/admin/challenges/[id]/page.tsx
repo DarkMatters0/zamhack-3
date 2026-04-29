@@ -5,10 +5,11 @@ import { Badge } from "@/components/ui/badge"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { approvePendingEdit, rejectPendingEdit } from "@/app/admin/actions"
-import { ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react"
+import { ArrowLeft, CheckCircle, XCircle, Clock, Handshake } from "lucide-react"
 import EvaluatorAssignmentPanel from "@/components/admin/evaluator-assignment-panel"
 import { ApproveChallengeModal } from "@/components/admin/approve-challenge-modal"
 import { RejectChallengeModal } from "./reject-challenge-modal"
+import { RevokeCollaborationModal } from "@/app/(admin)/admin/collaborations/[id]/revoke-collaboration-modal"
 
 export default async function AdminChallengeDetailsPage({
   params,
@@ -40,6 +41,17 @@ export default async function AdminChallengeDetailsPage({
     .from("challenge_evaluators")
     .select("evaluator_id, review_deadline, assigned_at, is_chief, profiles(first_name, last_name)")
     .eq("challenge_id", id)
+
+  // Fetch collaboration records for this challenge
+  const { data: collaborators } = await supabase
+    .from("challenge_collaborators")
+    .select(`
+      *,
+      collaborator_org:organizations!challenge_collaborators_organization_id_fkey(id, name, industry),
+      invited_by_profile:profiles!challenge_collaborators_invited_by_fkey(first_name, last_name)
+    `)
+    .eq("challenge_id", id)
+    .order("created_at", { ascending: false })
 
   // Fetch all available evaluator accounts
   const { data: allEvaluators } = await supabase
@@ -255,6 +267,80 @@ export default async function AdminChallengeDetailsPage({
                         Approve &amp; Apply Edit
                       </Button>
                     </form>
+                  </div>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Collaboration Section ── */}
+      {collaborators && collaborators.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Handshake className="h-5 w-5" />
+              Collaboration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {collaborators.map((collab: any) => {
+              const collabOrg = collab.collaborator_org
+              const invitedBy = collab.invited_by_profile
+              const inviterName = invitedBy
+                ? `${invitedBy.first_name ?? ""} ${invitedBy.last_name ?? ""}`.trim() || "—"
+                : "—"
+
+              const collabStatusBadge = () => {
+                switch (collab.status) {
+                  case "pending_admin_review":
+                    return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Pending Admin Review</Badge>
+                  case "pending_acceptance":
+                    return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Pending Acceptance</Badge>
+                  case "active":
+                    return <Badge className="bg-green-100 text-green-800 border-green-300">Active</Badge>
+                  case "revoked":
+                    return <Badge className="bg-red-100 text-red-800 border-red-300">Revoked</Badge>
+                  default:
+                    return <Badge variant="outline">{collab.status}</Badge>
+                }
+              }
+
+              return (
+                <div key={collab.id} className="rounded-lg border border-blue-200 bg-white p-4 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="font-semibold">{collabOrg?.name ?? "Unknown Org"}</p>
+                      {collabOrg?.industry && (
+                        <p className="text-xs text-muted-foreground">{collabOrg.industry}</p>
+                      )}
+                    </div>
+                    {collabStatusBadge()}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Invited by {inviterName} on {formatDate(collab.created_at)}
+                  </p>
+                  {collab.status === "revoked" && (
+                    <div className="text-sm text-red-700">
+                      <p>Revoked: {formatDateTime(collab.revoked_at)}</p>
+                      {collab.admin_note && <p>Note: {collab.admin_note}</p>}
+                    </div>
+                  )}
+                  <div className="flex gap-2 flex-wrap">
+                    {collab.status === "active" && (
+                      <RevokeCollaborationModal
+                        collaboratorId={collab.id}
+                        challengeTitle={challenge.title}
+                      />
+                    )}
+                    {collab.status === "pending_admin_review" && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/admin/collaborations/${collab.id}`}>
+                          Review Invite
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
               )

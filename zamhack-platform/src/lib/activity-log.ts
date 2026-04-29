@@ -30,6 +30,18 @@ export const ActivityAction = {
   ORG_PROFILE_UPDATED:    'org.profile_updated',
   MEMBER_INVITED:         'member.invited',
   MEMBER_REMOVED:         'member.removed',
+
+  // Collaboration actions
+  COLLAB_INVITE_SENT:              'collab.invite_sent',
+  COLLAB_INVITE_ADMIN_APPROVED:    'collab.invite_admin_approved',
+  COLLAB_INVITE_ADMIN_REJECTED:    'collab.invite_admin_rejected',
+  COLLAB_INVITE_ACCEPTED:          'collab.invite_accepted',
+  COLLAB_REVOKED_BY_OWNER:         'collab.revoked_by_owner',
+  COLLAB_REVOKED_BY_ADMIN:         'collab.revoked_by_admin',
+  COLLAB_REVOKED_VIA_SUSPENSION:   'collab.revoked_via_suspension',
+  COLLAB_EDIT_PROPOSED:            'collab.edit_proposed',
+  COLLAB_EDIT_OWNER_APPROVED:      'collab.edit_owner_approved',
+  COLLAB_EDIT_OWNER_REJECTED:      'collab.edit_owner_rejected',
 } as const
 
 export type ActivityActionType = typeof ActivityAction[keyof typeof ActivityAction]
@@ -42,6 +54,7 @@ export const EntityType = {
   PENDING_EDIT:  'pending_edit',
   EVALUATOR:     'evaluator',
   MEMBER:        'member',
+  COLLABORATION: 'collaboration',
 } as const
 
 export async function logActivity(payload: {

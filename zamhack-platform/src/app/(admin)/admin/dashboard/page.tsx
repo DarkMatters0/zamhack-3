@@ -12,6 +12,8 @@ import {
   FilePenLine,
 } from "lucide-react"
 import "@/app/(admin)/admin.css"
+import { getPendingCollaborationInvites } from "@/app/(admin)/admin/collaboration-actions"
+import { CollaborationInviteCard } from "./collaboration-invite-card"
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 type PendingEdit = Database["public"]["Tables"]["challenge_pending_edits"]["Row"]
@@ -106,11 +108,14 @@ const getUserName = (user: Profile) => {
 }
 
 export default async function AdminDashboardPage() {
-  const { pendingChallenges, pendingEdits, stats, recentUsers } =
-    await getAdminDashboardData()
+  const [{ pendingChallenges, pendingEdits, stats, recentUsers }, pendingCollabInvites] =
+    await Promise.all([
+      getAdminDashboardData(),
+      getPendingCollaborationInvites().catch(() => [] as any[]),
+    ])
 
   const totalPendingActions =
-    pendingChallenges.length + pendingEdits.length
+    pendingChallenges.length + pendingEdits.length + pendingCollabInvites.length
 
   return (
     <div className="space-y-6" data-layout="admin">
@@ -302,6 +307,9 @@ export default async function AdminDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Pending Collaboration Invites */}
+      <CollaborationInviteCard invites={pendingCollabInvites as any} />
 
       {/* Recent Users */}
       <div className="admin-card">

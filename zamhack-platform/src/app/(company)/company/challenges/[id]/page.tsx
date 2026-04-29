@@ -7,13 +7,16 @@ import { Progress } from "@/components/ui/progress"
 import { Database } from "@/types/supabase"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Lock, Trophy, CreditCard } from "lucide-react"
+import { Lock, Trophy, CreditCard, Handshake } from "lucide-react"
 import { submitChallengeForApproval, getTiedParticipantDetails } from "@/app/challenges/actions"
 import { computeRankedResultsWithBreakdown, shouldUseRankedMode, EvaluatorScore, RankedParticipantWithBreakdown } from "@/lib/rank-scoring"
 import { CloseChallengeButton } from "@/components/challenges/close-challenge-button"
 import { RecalculateWinnersButton } from "@/components/challenges/recalculate-winners-button"
 import { ResolveTieModal } from "@/components/challenges/resolve-tie-modal"
 import { RankingBreakdown } from "@/components/challenges/ranking-breakdown"
+import { getCollaborationForChallenge } from "@/app/(company)/company/challenges/collaboration-actions"
+import { getPendingCollaborationEditsForOwner } from "@/app/(company)/company/challenges/collaboration-review-actions"
+import { CollaborationPanel } from "./collaboration-panel"
 type Challenge = Database["public"]["Tables"]["challenges"]["Row"]
 type Participant = Database["public"]["Tables"]["challenge_participants"]["Row"]
 type Profile = Database["public"]["Tables"]["profiles"]["Row"]
@@ -46,6 +49,8 @@ interface ChallengeManagementData {
   participants: ParticipantWithProfile[]
   submissions: SubmissionWithDetails[]
   milestones: Milestone[]
+  userOrgId: string
+  ownerOrgName: string
   stats: {
     totalParticipants: number
     totalSubmissions: number
@@ -273,8 +278,18 @@ async function getChallengeManagementData(
     return null
   }
 
-  if (challenge.organization_id !== profile.organization_id) {
-    redirect("/company/dashboard")
+  const isUserOwner = challenge.organization_id === profile.organization_id
+  if (!isUserOwner) {
+    const { data: collabRow } = await supabase
+      .from("challenge_collaborators")
+      .select("id")
+      .eq("challenge_id", challengeId)
+      .eq("organization_id", profile.organization_id ?? "")
+      .eq("status", "active")
+      .limit(1)
+    if (!collabRow || collabRow.length === 0) {
+      redirect("/company/dashboard")
+    }
   }
 
   const { data: milestones, error: milestonesError } = await supabase
@@ -410,11 +425,19 @@ async function getChallengeManagementData(
     return { milestone, completed, total, percentage }
   })
 
+  const { data: ownerOrgData } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", challenge.organization_id ?? "")
+    .single()
+
   return {
     challenge,
     participants: participantsWithProfiles,
     submissions: submissionsWithDetails,
     milestones: milestonesList,
+    userOrgId: profile.organization_id ?? "",
+    ownerOrgName: ownerOrgData?.name ?? "",
     stats: {
       totalParticipants,
       totalSubmissions,
@@ -487,6 +510,12 @@ export default async function ChallengeManagementPage({
   }
 
   const { challenge, participants, submissions, stats, milestoneProgress, milestones } = data
+  const isOwner = challenge.organization_id === data.userOrgId
+
+  const [collaborationData, pendingCollabEdits] = await Promise.all([
+    getCollaborationForChallenge(id).catch(() => null),
+    getPendingCollaborationEditsForOwner(id).catch(() => []),
+  ])
 
   const isDraft = challenge.status === "draft"
   const isClosed = challenge.status === "closed" || challenge.status === "completed"
@@ -651,6 +680,10 @@ export default async function ChallengeManagementPage({
               Rankings
             </TabsTrigger>
           )}
+          <TabsTrigger value="collaboration">
+            <Handshake className="h-4 w-4 mr-1" />
+            Collaboration
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -849,6 +882,18 @@ export default async function ChallengeManagementPage({
             />
           </TabsContent>
         )}
+
+        <TabsContent value="collaboration" className="mt-6">
+          <CollaborationPanel
+            challengeId={id}
+            challengeStatus={challenge.status ?? ""}
+            challengeTitle={challenge.title ?? ""}
+            isOwner={isOwner}
+            collaboration={collaborationData as any}
+            pendingEdits={pendingCollabEdits as any}
+            ownerOrgName={data.ownerOrgName}
+          />
+        </TabsContent>
 
       </Tabs>
     </div>

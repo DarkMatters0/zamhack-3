@@ -98,6 +98,105 @@ export async function rejectOrganization(orgId: string) {
   return { success: true }
 }
 
+export async function suspendOrganization(orgId: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) redirect("/login")
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile) return { success: false, error: "Profile not found" }
+  if (profile.role !== "admin") return { success: false, error: "Unauthorized: Admin access required" }
+
+  const serviceSupabase = createServiceClient()
+  const { data: updated, error: updateError } = await serviceSupabase
+    .from("organizations")
+    .update({ status: "suspended" })
+    .eq("id", orgId)
+    .select()
+    .single()
+
+  if (updateError) return { success: false, error: updateError.message || "Failed to suspend organization" }
+  if (!updated) return { success: false, error: "Organization not found" }
+
+  // Collaboration cascade — revoke any active/pending collaborations for the suspended org
+  const { data: activeCollabs } = await serviceSupabase
+    .from("challenge_collaborators")
+    .select("id, challenge_id, organization_id, status")
+    .eq("organization_id", orgId)
+    .in("status", ["pending_admin_review", "pending_acceptance", "active"])
+
+  if (activeCollabs && activeCollabs.length > 0) {
+    await serviceSupabase
+      .from("challenge_collaborators")
+      .update({
+        status: "revoked",
+        revoked_at: new Date().toISOString(),
+        revoked_by: user.id,
+        invite_token: null,
+        token_expires_at: null,
+        admin_note: "Automatically revoked due to organization suspension",
+        updated_at: new Date().toISOString(),
+      } as any)
+      .in("id", activeCollabs.map((c) => c.id))
+
+    for (const collab of activeCollabs) {
+      await logActivity({
+        log_type: "admin",
+        actor_id: user.id,
+        action: ActivityAction.COLLAB_REVOKED_VIA_SUSPENSION,
+        entity_type: EntityType.COLLABORATION,
+        entity_id: collab.id,
+        metadata: {
+          challenge_id: collab.challenge_id,
+          suspended_org_id: orgId,
+          previous_status: collab.status,
+        },
+      })
+    }
+  }
+
+  revalidatePath("/admin/dashboard")
+  revalidatePath("/admin/users")
+  return { success: true }
+}
+
+export async function unsuspendOrganization(orgId: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) redirect("/login")
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile) return { success: false, error: "Profile not found" }
+  if (profile.role !== "admin") return { success: false, error: "Unauthorized: Admin access required" }
+
+  const serviceSupabase = createServiceClient()
+  const { data: updated, error: updateError } = await serviceSupabase
+    .from("organizations")
+    .update({ status: "active" })
+    .eq("id", orgId)
+    .select()
+    .single()
+
+  if (updateError) return { success: false, error: updateError.message || "Failed to unsuspend organization" }
+  if (!updated) return { success: false, error: "Organization not found" }
+
+  revalidatePath("/admin/dashboard")
+  revalidatePath("/admin/users")
+  return { success: true }
+}
+
 // ==========================================
 // CHALLENGE ACTIONS
 // ==========================================

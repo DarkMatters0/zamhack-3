@@ -68,6 +68,105 @@ export type Database = {
           },
         ]
       }
+      challenge_collaboration_edits: {
+        Row: {
+          id: string
+          challenge_id: string
+          collaborator_org_id: string
+          submitted_by: string
+          payload: Record<string, unknown>
+          status: 'pending_owner_review' | 'approved_by_owner' | 'rejected_by_owner'
+          owner_note: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          challenge_id: string
+          collaborator_org_id: string
+          submitted_by: string
+          payload: Record<string, unknown>
+          status?: 'pending_owner_review' | 'approved_by_owner' | 'rejected_by_owner'
+          owner_note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          challenge_id?: string
+          collaborator_org_id?: string
+          submitted_by?: string
+          payload?: Record<string, unknown>
+          status?: 'pending_owner_review' | 'approved_by_owner' | 'rejected_by_owner'
+          owner_note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      challenge_collaborators: {
+        Row: {
+          id: string
+          challenge_id: string
+          organization_id: string
+          invited_by: string
+          status: 'pending_admin_review' | 'pending_acceptance' | 'active' | 'revoked'
+          invite_token: string | null
+          token_expires_at: string | null
+          admin_approved_by: string | null
+          admin_approved_at: string | null
+          admin_note: string | null
+          accepted_by: string | null
+          accepted_at: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          challenge_id: string
+          organization_id: string
+          invited_by: string
+          status?: 'pending_admin_review' | 'pending_acceptance' | 'active' | 'revoked'
+          invite_token?: string | null
+          token_expires_at?: string | null
+          admin_approved_by?: string | null
+          admin_approved_at?: string | null
+          admin_note?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          challenge_id?: string
+          organization_id?: string
+          invited_by?: string
+          status?: 'pending_admin_review' | 'pending_acceptance' | 'active' | 'revoked'
+          invite_token?: string | null
+          token_expires_at?: string | null
+          admin_approved_by?: string | null
+          admin_approved_at?: string | null
+          admin_note?: string | null
+          accepted_by?: string | null
+          accepted_at?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       challenge_evaluators: {
         Row: {
           assigned_at: string | null
